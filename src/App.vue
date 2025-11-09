@@ -7,7 +7,7 @@ import { computed, ref } from "vue";
 
 const { settings, movestree, parseSGF, stones, ko, prisoners } = GobanApp();
 
-const size = ref(500);
+const size = ref(504);
 const gobanSize = ref(19);
 const gobanSizeComputed = computed(()=>{
     return [gobanSize.value, gobanSize.value];
