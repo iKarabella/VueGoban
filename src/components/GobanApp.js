@@ -5,7 +5,7 @@ import { ref, computed } from "vue";
 export default function () {
 
     const settings = ref({
-        size: [9,9],
+        size: [19,19],
         white_player_name: 'White',
         white_player_rank: null,
         black_player_name: 'Black',
@@ -21,7 +21,7 @@ export default function () {
 
     const game = ref({
         movestree: [], //Дерево ходов
-        ko: {coords:null, moveNum:null}, // ko
+        ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
         currentMode: 'black', //текущий режим (black, white, буквы, цифры)
         moveNumber: 0, //номер текущего хода
@@ -48,6 +48,8 @@ export default function () {
         let killed = game.value.groups.filter((g)=>{ //ищем убитые этим ходом группы
             return g.color==alter && g.dames.length==1 && g.dames[0][0]==coords[0] && g.dames[0][1]==coords[1];
         });
+
+        if(game.value.ko.moveNum<game.value.moveNumber) game.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
 
         if (
             killed.length==1 && 
@@ -158,9 +160,14 @@ export default function () {
             }
             return g;
         });
+
         game.value.currentMode=alter;
         game.value.moveNumber++;
         //TODO добавить ход в movestree
+
+        if (killed.length==1 && killed[0].stones.length==1 && dames.length==1) {
+            game.value.ko={coords:killed[0].stones[0], moveNum:game.value.moveNumber};
+        }
     }
 
     /**
