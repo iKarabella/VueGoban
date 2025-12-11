@@ -81,14 +81,16 @@ onBeforeMount(() => {
 });
 
 const vertexCalc = function(){
+    let comp_vertices = [];
     for(let x=props.settings.size[0]; x>0; x--) {
         for(let y=1; y<=props.settings.size[1]; y++){
-            vertices.value.push({
+            comp_vertices.push({
                 coords: [x, y],
                 class:''
             });
         }
     }
+    vertices.value = comp_vertices;
 };
 
 watch(props.settings, vertexCalc());
