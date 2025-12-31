@@ -3,33 +3,44 @@ import Goban from './components/Goban'; //отображение гобана
 import Dashboard from './components/Dashboard'; //отображение гобана
 import MovesTree from './components/MovesTree'; //отображение гобана
 import GobanApp from './components/GobanApp.js'; //функционал гобана
-import { computed, ref } from "vue";
+import { ref } from "vue";
 
-const { counter, settings, game, parseSGF, gobanAction } = GobanApp();
-const size = ref(window.innerHeight-50);
+const { settings, game, parseSGF, gobanAction, moveTo, currentNode } = GobanApp();
+const screenSize = {
+    height:window.innerHeight-50,
+    width:window.innerWidth
+};
+const size = ref(screenSize.height>screenSize.width?screenSize.width:screenSize.height);
 //const sgf = '(;GM[1]AP[StoneBase:SGFParser.3.0.1]SZ[19]VW[ja:sj]CA[utf-8]HA[0]PB[Black]PW[White]AB[pb][sb][pa][qa][pf][qf][pe][re][pd][rd][pc][ra]AW[sg][rg][rb][oa][qg][og][pg][of][rf][oe][se][od][sd][oc][qc][rc][ob][qb]N[黑先 死活题]C[创作者：陈禧](;B[qd];W[sf];B[sc]TE[1]C[CORRECT])(;B[sc];W[sa](;B[sc];W[sb];B[qd];W[qe])(;B[sb];W[sc];B[qd];W[sf]))(;B[sa];W[sc]))'
 
 </script>
 
 <template>
-    <div style="display:flex; align-items: stretch; display: flex; flex-direction: row;">
-        <div style="align-items: stretch; display: flex; flex-basis: 50%; flex-direction: column; flex-grow: 1; flex-shrink: 1; width: 100%;">
+    <div class="main_container">
+        <div class="goban_container">
             <Goban :size="size" :settings="settings" :game="game" @action="gobanAction"/>
             <Dashboard ref="dashboardBlock"/>
         </div>
         <div>
-            <MovesTree/>
-            <input type="number" v-model="size" style="max-width:200px;"/>
-            <select style="max-width:200px" v-model="settings.size">
-                <option :value="[19,19]">19*19</option>
-                <option :value="[13,13]">13*13</option>
-                <option :value="[9,9]">9*9</option>
-                <option :value="[21,21]">21*21</option>
-            </select>
-            <div style="color:blanchedalmond;">
-                {{ game.groups }}
-            </div>
-            <div style="color:blanchedalmond;">{{ game.currentMode }}</div>
+            <MovesTree :size="350" :game="game" @moveTo="moveTo"/>
+            <div style="color:bisque">{{ currentNode }}</div>
+            <div style="color:chartreuse">{{ game.movestree }}</div>
         </div>
     </div>
 </template>
+<style scoped>
+    .main_container{
+        display:flex; 
+        align-items: stretch; 
+        display: flex; 
+        @media (max-width: 480px) {
+            flex-direction: row;
+        };
+        @media (min-width: 480px) {
+            flex-direction: row;
+        }
+    }
+    .main_container .goban_container {
+        align-items: stretch; display: flex; flex-basis: 50%; flex-direction: column; flex-grow: 1; flex-shrink: 1; width: 100%;
+    }
+</style>

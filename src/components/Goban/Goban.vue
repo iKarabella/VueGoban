@@ -14,7 +14,6 @@ const props = defineProps({
 
 const emit = defineEmits(['action']);
 const alphabet = 'abcdefghjklmnopqrstuvwxyz';
-const grid = ref([]);
 
 const size = computed(()=>{    
     for(let i = props.size; i>0; i--) //TODO может без цикла как-то можно это высчитать?
