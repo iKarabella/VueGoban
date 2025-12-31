@@ -24,11 +24,16 @@ export default function () {
         ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
         currentMode: 'black', //текущий режим (black, white, буквы, цифры)
+        currentMove: {}, //текущий ход
         moveNumber: 0, //номер текущего хода
         groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
     });
 
+    const movesCache = ref({}); //кэш game для ходов
+
+    const currentNode = ref(game.value.movestree);
     const groupId = ref(0);
+    const moveId = ref(0);
 
     /**
      * Список буквенных координат SGF
@@ -39,7 +44,33 @@ export default function () {
         if (action.type=='move') move(action.coords);
     }
 
+    function moveTo(coords){
+        console.log(coords);
+
+        let cache = movesCache.value[coords.id];
+        if(!cache) return;
+
+        cache = JSON.parse(cache);
+
+        game.value.ko = cache.ko;
+        game.value.prisoners = cache.prisoners;
+        game.value.currentMode = cache.currentMode; 
+        game.value.currentMove = cache.currentMove; //TODO возможно надо будет найти новый текущий ход и передать его сюда после перехода
+        game.value.moveNumber = cache.moveNumber;
+        game.value.groups = cache.groups;
+
+        let findNode = game.value.movestree;
+
+        coords.nodes.forEach(node=>{
+            let find = findNode.find(move=>move.number==node);
+            findNode = find.children;
+        });
+        currentNode.value = findNode;
+    }
+
     function move(coords){
+
+        const start = performance.now();
 
         if(game.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1]))) return; //место занято
 
@@ -48,7 +79,7 @@ export default function () {
         let killed = game.value.groups.filter((g)=>{ //ищем убитые этим ходом группы
             return g.color==alter && g.dames.length==1 && g.dames[0][0]==coords[0] && g.dames[0][1]==coords[1];
         });
-
+        
         if(game.value.ko.moveNum<game.value.moveNumber) game.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
 
         if (
@@ -103,7 +134,6 @@ export default function () {
             else dames.push([coords[0],coords[1]+1]);
         }
 
-        //TODO если камень объединяет группы
         let connectedGroups = game.value.groups.filter((group)=>{
             return group.color==game.value.currentMode && group.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]);
         });
@@ -161,13 +191,45 @@ export default function () {
             return g;
         });
 
+        let vertex = `${abc[coords[0]-1]}${abc[coords[1]-1]}`;
+
+        moveId.value++;
+
+        let newMove = {
+            id:moveId.value,
+            number: game.value.moveNumber,
+            color: game.value.currentMode,
+            coords: coords,
+            vertex: vertex,
+            children:[],
+            marks:[],
+        };
+
+        if(currentNode.value.length==0 || (currentNode.value[currentNode.value.length-1].number==game.value.moveNumber-1)) currentNode.value.push(newMove);
+        else {
+            let currentMove = currentNode.value.find((f)=>f.number==game.value.moveNumber-1);
+            currentMove.children.push(newMove);  //TODO иногда не находит
+            currentNode.value = currentMove.children;
+        }
+
         game.value.currentMode=alter;
         game.value.moveNumber++;
-        //TODO добавить ход в movestree
+        game.value.currentMove = newMove;
 
         if (killed.length==1 && killed[0].stones.length==1 && dames.length==1) {
             game.value.ko={coords:killed[0].stones[0], moveNum:game.value.moveNumber};
         }
+
+        movesCache.value[newMove.id] = JSON.stringify({
+            ko: game.value.ko,
+            prisoners: game.value.prisoners,
+            currentMode: game.value.currentMode, 
+            currentMove: game.value.currentMove,
+            moveNumber: game.value.moveNumber, 
+            groups: game.value.groups, 
+        });
+
+        console.log(`move(): ${performance.now() - start} мс`);
     }
 
     /**
@@ -209,6 +271,6 @@ export default function () {
     }
 
     return {
-        settings, game, parseSGF, gobanAction
+        settings, game, parseSGF, gobanAction, moveTo, currentNode
     }
 }
