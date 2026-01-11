@@ -18,7 +18,7 @@ const branchLineColor = function(index){
     return branchLines[index]?branchLines[index]:'#c0a5f1';
 };
 
-const readBranch = function(branch, nodes=[], addNode=null, parentIndent=0)
+const readBranch = function(node, nodes=[], addNode=null, parentIndent=0)
 {
     let currentBranch = {
         moves:[],
@@ -29,21 +29,23 @@ const readBranch = function(branch, nodes=[], addNode=null, parentIndent=0)
     
     if (addNode!==null) nodes.push(addNode);
 
-    for(let i=branch.length-1; i>=0; i--)
-    {
-        currentBranch.moves.unshift({
-            number:branch[i].number+1, 
-            color:branch[i].color, 
-            nodes:nodes.slice(0), 
-            id:branch[i].id
-        });
-
-        if (branch[i].children.length>0) 
+    node.forEach((branch, nodeIndex)=>{
+        for(let i=branch.length-1; i>=0; i--)
         {
-            branchIndent.value++;
-            branches.push(...readBranch(branch[i].children, nodes.slice(0), branch[i].number, currentBranch.indent));
+            currentBranch.moves.unshift({
+                number:branch[i].number+1, 
+                color:branch[i].color, 
+                nodes:nodes.slice(0), 
+                id:branch[i].id
+            });
+
+            if (branch[i].children.length>0) 
+            {
+                branchIndent.value++;
+                branches.push(...readBranch(branch[i].children, nodes.slice(0), {number:branch[i].number, branch:nodeIndex}, currentBranch.indent));
+            }
         }
-    }
+    });
 
     return [currentBranch, ...branches];
 };

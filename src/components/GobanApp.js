@@ -20,7 +20,9 @@ export default function () {
     });
 
     const game = ref({
-        movestree: [], //Дерево ходов
+        movestree: [ //Дерево ходов
+            [] //нулевая ветка
+        ],
         ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
         currentMode: 'black', //текущий режим (black, white, буквы, цифры)
@@ -31,7 +33,8 @@ export default function () {
 
     const movesCache = ref({}); //кэш game для ходов
 
-    const currentNode = ref(game.value.movestree);
+    const currentNode = ref(game.value.movestree); //текущая нода из дерева ходов
+    const currentNodeBranch = ref(0); //index текущей ветки ноды
     const groupId = ref(0);
     const moveId = ref(0);
 
@@ -61,11 +64,15 @@ export default function () {
 
         let findNode = game.value.movestree;
 
-        coords.nodes.forEach(node=>{
-            let find = findNode.find(move=>move.number==node);
-            findNode = find.children;
-        });
-        currentNode.value = findNode;
+        if(coords.nodes!==null)
+        {
+            coords.nodes.forEach(node=>{
+                let find = undefined;
+                if(findNode[node.branch]) find = findNode[node.branch].find(move=>move.number==node.number);
+                if (find) findNode = find.children;
+            });
+            currentNode.value = findNode;
+        }
     }
 
     function move(coords){
@@ -73,6 +80,35 @@ export default function () {
         const start = performance.now();
 
         if(game.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1]))) return; //место занято
+
+        let currentMoveIndex = currentNode.value[currentNodeBranch.value].findIndex(arr=>{
+            return arr.vertex==game.value.currentMove.vertex && arr.number==game.value.currentMove.number;
+        });
+
+        let nextMoveIndex = currentMoveIndex+1;
+        let existInNextMoves = false;
+
+        if( //если ход в следующий существующий
+            currentNode.value[currentNodeBranch.value][nextMoveIndex] &&
+            currentNode.value[currentNodeBranch.value][nextMoveIndex].coords[0]==coords[0] &&
+            currentNode.value[currentNodeBranch.value][nextMoveIndex].coords[1]==coords[1]
+        ) {
+            existInNextMoves = true;
+            moveTo({nodes:null, id:currentNode.value[currentNodeBranch.value][nextMoveIndex].id, number:currentNode.value[currentNodeBranch.value][nextMoveIndex].number});
+        }
+        else if(currentMoveIndex>=0) {
+            //если ход в первый ход какой-то дочерней ветки текущего хода
+            currentNode.value[currentNodeBranch.value][currentMoveIndex].children.forEach((child, index)=>{
+                if(child[0].coords[0]==coords[0] && child[0].coords[1]==coords[1]) {
+                    existInNextMoves = true;
+                    currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
+                    currentNodeBranch.value = index;
+                    moveTo({nodes:null, id:child[0].id, number:child[0].number});
+                }
+            });
+        }
+
+        if (existInNextMoves) return;
 
         let alter = game.value.currentMode=='black'?'white':'black';
 
@@ -205,11 +241,15 @@ export default function () {
             marks:[],
         };
 
-        if(currentNode.value.length==0 || (currentNode.value[currentNode.value.length-1].number==game.value.moveNumber-1)) currentNode.value.push(newMove);
-        else {
-            let currentMove = currentNode.value.find((f)=>f.number==game.value.moveNumber-1);
-            currentMove.children.push(newMove);  //TODO иногда не находит
-            currentNode.value = currentMove.children;
+        //если нода пустая или текущий ход - последний в ветке         
+        if( currentNode.value[currentNodeBranch.value].length==0 || currentNode.value[currentNodeBranch.value].length == currentMoveIndex+1)
+        {
+            currentNode.value[currentNodeBranch.value].push(newMove);
+        }
+        else { //если ход заводит новую ветку
+            currentNode.value[currentNodeBranch.value][currentMoveIndex].children.push([newMove]);
+            currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
+            currentNodeBranch.value = currentNode.value.length-1;
         }
 
         game.value.currentMode=alter;
@@ -271,6 +311,6 @@ export default function () {
     }
 
     return {
-        settings, game, parseSGF, gobanAction, moveTo, currentNode
+        settings, game, parseSGF, gobanAction, moveTo, currentNode, currentNodeBranch
     }
 }
