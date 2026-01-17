@@ -48,7 +48,6 @@ export default function () {
     }
 
     function moveTo(coords){
-        console.log(coords);
 
         let cache = movesCache.value[coords.id];
         if(!cache) return;
@@ -58,21 +57,21 @@ export default function () {
         game.value.ko = cache.ko;
         game.value.prisoners = cache.prisoners;
         game.value.currentMode = cache.currentMode; 
-        game.value.currentMove = cache.currentMove; //TODO возможно надо будет найти новый текущий ход и передать его сюда после перехода
+        game.value.currentMove = cache.currentMove;
         game.value.moveNumber = cache.moveNumber;
         game.value.groups = cache.groups;
 
         let findNode = game.value.movestree;
+        let findIndex = 0;
 
-        if(coords.nodes!==null)
-        {
-            coords.nodes.forEach(node=>{
-                let find = undefined;
-                if(findNode[node.branch]) find = findNode[node.branch].find(move=>move.number==node.number);
-                if (find) findNode = find.children;
-            });
-            currentNode.value = findNode;
-        }
+        if (coords.nodes!==null) coords.nodes.forEach(node => {
+            let find = findNode[findIndex].find(move=>move.number==node.number);
+            findNode = find.children;
+            findIndex = node.branch;
+        });
+
+        currentNode.value = findNode;
+        currentNodeBranch.value = findIndex;
     }
 
     function move(coords){
@@ -102,8 +101,8 @@ export default function () {
                 if(child[0].coords[0]==coords[0] && child[0].coords[1]==coords[1]) {
                     existInNextMoves = true;
                     currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
-                    currentNodeBranch.value = index;
                     moveTo({nodes:null, id:child[0].id, number:child[0].number});
+                    return;
                 }
             });
         }
@@ -118,15 +117,13 @@ export default function () {
         
         if(game.value.ko.moveNum<game.value.moveNumber) game.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
 
+        //проверяем на Ко
         if (
             killed.length==1 && 
             killed[0].stones.length==1 && 
             game.value.ko.moveNum==game.value.moveNumber && 
             (game.value.ko.coords[0]==coords[0] && game.value.ko.coords[1]==coords[1])
-        ){
-            //ход запрещен правилом Ко
-            return;
-        }
+        ) return; 
 
         if(killed.length>0){
             killed.forEach((k)=>{
@@ -266,7 +263,7 @@ export default function () {
             currentMode: game.value.currentMode, 
             currentMove: game.value.currentMove,
             moveNumber: game.value.moveNumber, 
-            groups: game.value.groups, 
+            groups: game.value.groups,
         });
 
         console.log(`move(): ${performance.now() - start} мс`);
