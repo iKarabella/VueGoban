@@ -215,11 +215,41 @@ const calculatePath = (start, end) => {
 
 	return `M ${start.x},${start.y} Q ${center.x},${center.y} ${end.x},${end.y}`;
 }
+
+const cursorCoords = ref({x:null, y:null, fixIndentX:null, fixIndentY:null});
+
+const trackMouseInContainer = (e)=>{
+    if(cursorCoords.value.x!==null){
+        let calcX = cursorCoords.value.fixIndentX + (e.clientX - cursorCoords.value.x);
+        let calcY = cursorCoords.value.fixIndentY + (e.clientY - cursorCoords.value.y);
+        
+        if (calcX<1 && (elSize.value+5)*maxMoveNumber.value+calcX > props.width) movestreeHorizontalIndent.value = calcX;
+        if (calcY<1 && (elSize.value+5)*branches.value.length+calcY > props.height) movestreeVerticalIndent.value = calcY;
+    }
+};
+const handleMouseDownLeft = (e)=>{ //TODO попробовать отслеживать зажатие левой кнопки через event listeners. 
+                                   // сейчас при выходе курсора из блока потом некорректно нажатие отрабатывает
+    cursorCoords.value.x = e.clientX;
+    cursorCoords.value.y = e.clientY;
+    cursorCoords.value.fixIndentX = movestreeHorizontalIndent.value;
+    cursorCoords.value.fixIndentY = movestreeVerticalIndent.value;
+};
+const handleMouseClickLeft = ()=>{
+    cursorCoords.value.x = null;
+    cursorCoords.value.y = null;
+    cursorCoords.value.fixIndentX=null;
+    cursorCoords.value.fixIndentY=null;
+}
 </script>
 
 <template>
-    <div :style="container_style">
-        <svg :width="(elSize+5)*maxMoveNumber" :height="(elSize+5)*branches.length" :style="`position:absolute; left:${movestreeHorizontalIndent}px; top:${movestreeVerticalIndent}px; overflow:hidden;`">
+    <div :style="container_style" 
+         @mousemove="trackMouseInContainer" 
+         @mousedown.left="handleMouseDownLeft" 
+         @click.left="handleMouseClickLeft"
+         @mouseleave="handleMouseClickLeft"
+    >
+        <svg :width="(elSize+5)*maxMoveNumber" :height="(elSize+5)*branches.length" :style="`position:absolute; left:${movestreeHorizontalIndent+5}px; top:${movestreeVerticalIndent+5}px; overflow:hidden;`">
             <defs>
                 <image id="mt_black-1" :width="elSize" :height="elSize" :xlink:href="blackStone"></image>
                 <image id="mt_white-1" :width="elSize" :height="elSize" :xlink:href="whiteStone"></image>
@@ -253,7 +283,6 @@ const calculatePath = (start, end) => {
             </g>
         </svg>
     </div>
-    <div style="color:aquamarine">branches: {{ branches }}</div>
 </template>
 <style scoped>
     g .move {
