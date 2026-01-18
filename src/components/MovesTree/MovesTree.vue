@@ -64,7 +64,7 @@ const movestreeVerticalIndent = ref(0);
  * @return string код цвета
  */
 const branchLineColor = function(index){
-    return branchLines[index]?branchLines[index]:'#c0a5f1';
+    return branchLines[index] ? branchLines[index] : '#c0a5f1';
 };
 
 /**
@@ -86,7 +86,7 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
         let currentBranch = { //создаем объект текущей ветки, которую выделяем из movestree
             moves:[], //ходы ветки
             indent:branchIndent.value, //отступ сверху до текущей ветки
-            parentIndent:parentIndent //отступ сверху до родительской ветки //TODO неправильно считает расстояние до родительской ветки по вертикали
+            parentIndent:parentIndent //отступ сверху до родительской ветки
         };
         
         let childBranches = []; //дочерние ветки
@@ -135,8 +135,11 @@ const calculateIndent = ()=>{
 
     /**
      * расстояние от границы контейнера при котором пересчитываем сдвиг
-     */
-    let fieldMove = (elSize.value+5)*3;
+     */    
+    let fieldMove = {
+        x:(elSize.value+5)*3, 
+        y:(elSize.value+5)*2
+    };
 
     /**
      * сдвиг текущего хода от начала контейнера по горизонтали
@@ -149,11 +152,39 @@ const calculateIndent = ()=>{
     let hc2Indent = props.width - hc1Indent;
     
     //если пересчитываем сдвиг к концу контейнера
-    if (hc2Indent<fieldMove) newIndents.x = props.width - hIndent - fieldMove;
+    if (hc2Indent<fieldMove.x) newIndents.x = props.width - hIndent - fieldMove.x;
     //если пересчитываем сдвиг к началу контейнера
-    else if (hc1Indent<fieldMove) newIndents.x = fieldMove-hIndent; 
+    else if (hc1Indent<fieldMove.x) newIndents.x = fieldMove.x-hIndent; 
+
+    /**
+     * Индекс ветки из branches с текущим ходом
+     */
+    let currentBranch = branches.value.findIndex(branch=>{
+        return branch.moves.some(move=>move.id==props.game.currentMove.id);
+    });
+
+    /**
+     * сдвиг текущего хода от начала SVG в px по вертикали
+     */
+    let vIndent = (elSize.value+5)*currentBranch+1;
+
+    /**
+     * сдвиг текущего хода от начала контейнера по вертикали
+     */
+    let vc1Indent = vIndent+movestreeVerticalIndent.value;
+
+    /**
+     * расстояние текущего хода до конца контейнера по вертикали
+     */
+    let vc2Indent = props.height - vc1Indent;
+    
+    //если пересчитываем сдвиг к концу контейнера
+    if (vc2Indent<fieldMove.y) newIndents.y = props.height - vIndent - fieldMove.y;
+    //если пересчитываем сдвиг к началу контейнера
+    else if (vc1Indent<fieldMove.y) newIndents.y = fieldMove.y-vIndent; 
 
     if (newIndents.x!==false) movestreeHorizontalIndent.value = newIndents.x > 0 ? 0 : newIndents.x;
+    if (newIndents.y!==false) movestreeVerticalIndent.value = newIndents.y > 0 ? 0 : newIndents.y;
 }
 
 watch(props.game.movestree, ()=>{
@@ -187,7 +218,6 @@ const calculatePath = (start, end) => {
 </script>
 
 <template>
-    <div style="color:aquamarine">currentMoveBranchIndent:{{ currentMoveBranchIndent }} | maxMoveNumber:{{ maxMoveNumber }}</div>
     <div :style="container_style">
         <svg :width="(elSize+5)*maxMoveNumber" :height="(elSize+5)*branches.length" :style="`position:absolute; left:${movestreeHorizontalIndent}px; top:${movestreeVerticalIndent}px; overflow:hidden;`">
             <defs>
@@ -219,11 +249,11 @@ const calculatePath = (start, end) => {
                         alignment-baseline="middle" text-anchor="middle" dominant-baseline="middle">
                         {{move.number}}
                     </text>
-                    {{ move.nodes }}
                 </g>
             </g>
         </svg>
     </div>
+    <div style="color:aquamarine">branches: {{ branches }}</div>
 </template>
 <style scoped>
     g .move {
