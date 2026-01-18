@@ -60,18 +60,21 @@ export default function () {
         game.value.currentMove = cache.currentMove;
         game.value.moveNumber = cache.moveNumber;
         game.value.groups = cache.groups;
+        currentNodeBranch.value = cache.currentNodeBranch;
 
         let findNode = game.value.movestree;
         let findIndex = 0;
 
-        if (coords.nodes!==null) coords.nodes.forEach(node => {
-            let find = findNode[findIndex].find(move=>move.number==node.number);
-            findNode = find.children;
-            findIndex = node.branch;
-        });
-
-        currentNode.value = findNode;
-        currentNodeBranch.value = findIndex;
+        if (coords.nodes!==null) {
+            coords.nodes.forEach(node => {
+                let find = findNode[findIndex].find(move=>move.number==node.number);
+                findNode = find.children;
+                findIndex = node.branch;
+            });
+    
+            currentNode.value = findNode;
+            currentNodeBranch.value = findIndex;
+        }
     }
 
     function move(coords){
@@ -264,6 +267,7 @@ export default function () {
             currentMove: game.value.currentMove,
             moveNumber: game.value.moveNumber, 
             groups: game.value.groups,
+            currentNodeBranch: currentNodeBranch.value
         });
 
         console.log(`move(): ${performance.now() - start} мс`);
