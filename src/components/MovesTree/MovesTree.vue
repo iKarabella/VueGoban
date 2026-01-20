@@ -6,12 +6,13 @@ const props = defineProps({
   width:{type:Number, default:550}, //ширина контейнера с SVG
   height:{type:Number, default:250}, //высота контейнера с SVG
 });
+
 const emit = defineEmits(['moveTo']);
 
 /**
  * строка стилевого оформления контейнера SVG
  */
-const container_style = `width: ${props.width}px; height: ${props.height}px; overflow: hidden; border: 1px solid #ccc; background-color:#c0c0c0; position:relative;`;
+const container_style = `width: ${props.width}px; height: ${props.height}px; overflow: hidden; border: 1px solid #ccc; background-color:#c0c0c0; position:relative; border-radius: 7px;`;
 
 /**
  * изображение белого камня в base64
@@ -57,6 +58,25 @@ const movestreeHorizontalIndent = ref(0);
  * Текущий вертикальный сдвиг SVG относительно контейнера в пикселях
  */
 const movestreeVerticalIndent = ref(0);
+
+/**
+ * Зафиксированные параметры курсора/сдвига SVG при "ручном" перетаскивании дерева ходов
+ */
+const cursorCoords = ref({x:null, y:null, fixIndentX:null, fixIndentY:null});
+
+/**
+ * Размер камня в пикселях
+ */
+const elSize = computed(()=>{
+    return 28;
+});
+
+/**
+ * Размер шрифта
+ */
+const fontSize = computed(() => {
+    return Math.floor(elSize.value/2);
+});
 
 /**
  * Возвращает код цвета ветки по индексу
@@ -121,7 +141,12 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
     return branches;
 };
 
-const calculateIndent = ()=>{
+/**
+ * Расчет сдвига SVG картинки относительно контейнера
+ * 
+ * @return void, результат записывается в movestreeHorizontalIndent и movestreeVerticalIndent
+ */
+const calculateIndent = () => {
 
     /**
      * Новые новые значения сдвига SVG от начала контейнера
@@ -187,26 +212,25 @@ const calculateIndent = ()=>{
     if (newIndents.y!==false) movestreeVerticalIndent.value = newIndents.y > 0 ? 0 : newIndents.y;
 }
 
-watch(props.game.movestree, ()=>{
-    branches.value = readBranch(props.game.movestree);
-    branchIndent.value=0;
-    calculateIndent();
-});
-
-const elSize = computed(()=>{
-    return 28;
-});
-
-const fontSize = computed(()=>{
-    return Math.floor(elSize.value/2);
-});
-
-const clickMove = (nodes, number, mid)=>{
+/**
+ * Выбор хода из дерева
+ * 
+ * @param nodes узлы ведущие к этому ходу
+ * @param number номер хода
+ * @param mid ID хода
+ */
+const clickMove = (nodes, number, mid) => {
     if (props.game.currentMove.id && props.game.currentMove.id==mid) return;
     emit('moveTo', {nodes:nodes, number:number, id:mid});
     calculateIndent();
 };
 
+/**
+ * Расчет кривой линии к дочерней ветке
+ * @param start координаты начала линии
+ * @param end координаты конца линии
+ * @return строка для атрибута d тэга <path>
+ */
 const calculatePath = (start, end) => {
     const center = {
       x: (start.x + end.x)/1.75,
@@ -216,8 +240,10 @@ const calculatePath = (start, end) => {
 	return `M ${start.x},${start.y} Q ${center.x},${center.y} ${end.x},${end.y}`;
 }
 
-const cursorCoords = ref({x:null, y:null, fixIndentX:null, fixIndentY:null});
-
+/**
+ * "Перетаскивание" SVG с деревом ходов мышкой
+ * @param e 
+ */
 const trackMouseInContainer = (e)=>{
     if(cursorCoords.value.x!==null){
         let calcX = cursorCoords.value.fixIndentX + (e.clientX - cursorCoords.value.x);
@@ -240,6 +266,13 @@ const handleMouseClickLeft = ()=>{
     cursorCoords.value.fixIndentX=null;
     cursorCoords.value.fixIndentY=null;
 }
+
+watch(props.game.movestree, ()=>{
+    branches.value = readBranch(props.game.movestree);
+    branchIndent.value=0;
+    calculateIndent();
+    console.log('movestree watcher');
+});
 </script>
 
 <template>
@@ -283,6 +316,7 @@ const handleMouseClickLeft = ()=>{
             </g>
         </svg>
     </div>
+    {{ game }}
 </template>
 <style scoped>
     g .move {
