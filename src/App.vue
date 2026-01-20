@@ -4,8 +4,9 @@ import Dashboard from './components/Dashboard'; //отображение гоб�
 import MovesTree from './components/MovesTree'; //отображение гобана
 import GobanApp from './components/GobanApp.js'; //функционал гобана
 import { ref } from "vue";
+import GameInfo from './components/GameInfo';
 
-const { settings, game, parseSGF, gobanAction, moveTo, currentNode } = GobanApp();
+const { settings, game, parseSGF, gobanAction, moveTo } = GobanApp();
 const screenSize = {
     height:window.innerHeight-50,
     width:window.innerWidth
@@ -22,13 +23,13 @@ const size = ref(screenSize.height>screenSize.width?screenSize.width:screenSize.
             <Dashboard ref="dashboardBlock"/>
         </div>
         <div>
-            <MovesTree :size="350" :game="game" @moveTo="moveTo"/>
-            <div style="color:bisque">{{ currentNode }}</div>
-            <div style="color:chartreuse">{{ game.movestree }}</div>
+            <GameInfo :prisoners="game.prisoners" :gameInfo="settings"/>
+            <MovesTree :width="550" :game="game" @moveTo="moveTo"/>
         </div>
     </div>
 </template>
-<style scoped>
+<style>
+    @import "tailwindcss";
     .main_container{
         display:flex; 
         align-items: stretch; 
