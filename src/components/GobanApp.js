@@ -43,6 +43,35 @@ export default function () {
      */
     const abc = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
 
+    function createNewGame(info){
+        settings.value.size = [9,9];
+        settings.value.white_player_name = 'White';
+        settings.value.white_player_rank = null;
+        settings.value.black_player_name = 'Black';
+        settings.value.black_player_rank = null;
+        settings.value.game_date = null;
+        settings.value.game_result = null;
+        settings.value.main_time = null;
+        settings.value.overtime = null;
+        settings.value.comment = null;
+        settings.value.zero_white = [];
+        settings.value.zero_black = [];
+
+        game.value.movestree = [[]];
+        game.value.ko = {coords:[], moveNum:null};
+        game.value.prisoners = [0,0];
+        game.value.currentMode = 'black';
+        game.value.currentMove =  {};
+        game.value.moveNumber = 0;
+        game.value.groups = [];
+
+        movesCache.value={};
+        currentNode.value = game.value.movestree;
+        currentNodeBranch.value = 0;
+        groupId.value = 0;
+        moveId.value = 0;
+    }
+
     function gobanAction(action){
         if (action.type=='move') move(action.coords);
     }
@@ -312,6 +341,6 @@ export default function () {
     }
 
     return {
-        settings, game, parseSGF, gobanAction, moveTo, currentNode, currentNodeBranch
+        settings, game, parseSGF, gobanAction, moveTo, createNewGame
     }
 }

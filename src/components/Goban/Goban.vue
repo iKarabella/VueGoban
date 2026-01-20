@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeMount, ref, toRefs, watch } from 'vue';
+import { computed, onBeforeMount, ref, watch } from 'vue';
 
 const props = defineProps({
     displayArea:{ //отображаемая часть доски
@@ -80,6 +80,7 @@ onBeforeMount(() => {
 });
 
 const vertexCalc = function(){
+    console.log('goban: vertexCalc');
     let comp_vertices = [];
     for(let x=props.settings.size[0]; x>0; x--) {
         for(let y=1; y<=props.settings.size[1]; y++){
@@ -146,7 +147,7 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
                 </g>
             </g>
         </svg>
-        <div class="grid" :style="`top: ${fieldSize}px; left:${fieldSize}px; grid-template-columns: repeat(${settings.size[0]}, ${elSize+1}px); grid-auto-rows: ${elSize+1}px;`">
+        <div class="grid absolute" :style="`top: ${fieldSize}px; left:${fieldSize}px; grid-template-columns: repeat(${settings.size[0]}, ${elSize+1}px); grid-auto-rows: ${elSize+1}px;`">
             <div v-for="(v, index) in vertices" :key="index" :ref="`vertex${index}`"
                  @click="clickVertice(v.coords)"
                  @mouseover="hoverVertice(index)" 
@@ -161,10 +162,6 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
 <style scoped>
     .goban-container {
         position:relative;
-    }
-    .grid{
-        position:absolute;
-        display:grid;
     }
     svg{
         background-image:url('/board.png');
