@@ -17,6 +17,7 @@ export default function () {
         comment: null, //комментарий до первого хода
         zero_white: [], //белые камни до первого хода 
         zero_black: [], //черные камни до первого хода
+        rules: 'Japanese', //Правила
     });
 
     const game = ref({
@@ -43,16 +44,21 @@ export default function () {
      */
     const abc = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
 
+    /**
+     * Создание новой игры
+     * @param {*} info 
+     */
     function createNewGame(info){
-        settings.value.size = [9,9];
-        settings.value.white_player_name = 'White';
-        settings.value.white_player_rank = null;
-        settings.value.black_player_name = 'Black';
-        settings.value.black_player_rank = null;
-        settings.value.game_date = null;
-        settings.value.game_result = null;
-        settings.value.main_time = null;
-        settings.value.overtime = null;
+        settings.value.size = info.goban_size;
+        settings.value.white_player_name = info.white_player_name;
+        settings.value.white_player_rank = info.white_player_rank;
+        settings.value.black_player_name = info.black_player_name;
+        settings.value.black_player_rank = info.black_player_rank;
+        settings.value.game_date = info.game_date;
+        settings.value.game_result = info.game_result;
+        settings.value.main_time = info.main_time;
+        settings.value.overtime = info.overtime;
+        settings.value.rules = info.rules;
         settings.value.comment = null;
         settings.value.zero_white = [];
         settings.value.zero_black = [];
@@ -77,7 +83,7 @@ export default function () {
     }
 
     function moveTo(coords){
-
+        if(!coords) return;
         let cache = movesCache.value[coords.id];
         if(!cache) return;
 

@@ -50,20 +50,21 @@ const createGame = (cancel=false)=>{
     }
     if (!canCreate.value) return;
 
-    if(goban_size.value='19*19') createGameForm.goban_size = [19,19];
-    else if(goban_size.value='13*13') createGameForm.goban_size = [13,13];
-    else if(goban_size.value='9*9') createGameForm.goban_size = [9,9];
+    if(goban_size.value=='19*19') createGameForm.value.goban_size = [19,19];
+    else if(goban_size.value=='13*13') createGameForm.value.goban_size = [13,13];
+    else if(goban_size.value=='9*9') createGameForm.value.goban_size = [9,9];
 
-    if (time_settings.type=='Абсолют') createGameForm.overtime='ABSOLUT';
-    else if(time_settings.type=='Беёми') 
+    if (time_settings.value.type=='Абсолют') createGameForm.value.overtime='ABSOLUT';
+    else if(time_settings.value.type=='Беёми') 
     {
-        createGameForm.overtime='BYOMI'+time_settings.periods+'-'.time_settings.seconds;
+        createGameForm.value.overtime='BYOMI'+time_settings.value.periods+'-'+time_settings.value.seconds;
     }
-    else if (time_settings.type=='Фишер')
+    else if (time_settings.value.type=='Фишер')
     {
-        createGameForm.overtime='FISHER'+time_settings.seconds;
+        createGameForm.value.overtime='FISHER'+time_settings.value.seconds;
     }
-    emit('createNewGame', {createGameForm});
+    console.log('createComponent', createGameForm.value.goban_size);
+    emit('createNewGame', createGameForm.value);
 }
 
 </script>

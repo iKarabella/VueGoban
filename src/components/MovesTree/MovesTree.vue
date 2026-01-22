@@ -135,7 +135,7 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
                 childBranches.push(...readBranch(branch[i].children, nodes.slice(0), branch[i].number, currentBranch.indent));
             }
         }
-        branches.push(currentBranch, ...childBranches);
+        if (currentBranch.moves.length>0) branches.push(currentBranch, ...childBranches);
     });
 
     return branches;
@@ -267,12 +267,16 @@ const handleMouseClickLeft = ()=>{
     cursorCoords.value.fixIndentY=null;
 }
 
-watch(props.game.movestree, ()=>{
+const movestreeJson = computed(()=>{
+    return JSON.stringify(props.game.movestree);
+});
+
+watch(movestreeJson, ()=>{
     branches.value = readBranch(props.game.movestree);
     branchIndent.value=0;
     calculateIndent();
-    console.log('movestree watcher');
 });
+
 </script>
 
 <template>
@@ -316,7 +320,6 @@ watch(props.game.movestree, ()=>{
             </g>
         </svg>
     </div>
-    {{ game }}
 </template>
 <style scoped>
     g .move {
