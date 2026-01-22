@@ -80,7 +80,6 @@ onBeforeMount(() => {
 });
 
 const vertexCalc = function(){
-    console.log('goban: vertexCalc');
     let comp_vertices = [];
     for(let x=props.settings.size[0]; x>0; x--) {
         for(let y=1; y<=props.settings.size[1]; y++){
@@ -93,7 +92,13 @@ const vertexCalc = function(){
     vertices.value = comp_vertices;
 };
 
-watch(props.settings, vertexCalc());
+const gobanSize = computed(()=>{
+    return JSON.stringify(props.settings.size);
+});
+
+watch(gobanSize, ()=>{
+    vertexCalc();
+});
 
 const clickVertice = function(coords)
 {    
