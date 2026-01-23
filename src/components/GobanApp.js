@@ -118,7 +118,10 @@ export default function () {
 
         const start = performance.now();
 
-        if(game.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1]))) return; //место занято
+        if(
+            game.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1])) //место занято
+            || (game.value.currentMode!='black' && game.value.currentMode!='white') //текущий режим не для ходов
+        ) return; 
 
         let currentMoveIndex = currentNode.value[currentNodeBranch.value].findIndex(arr=>{
             return arr.vertex==game.value.currentMove.vertex && arr.number==game.value.currentMove.number;
@@ -277,6 +280,10 @@ export default function () {
             children:[],
             marks:[],
         };
+
+        if(killed.length>0){
+            game.value.prisoners[game.value.currentMode=='black'?0:1]+=killed.map(group=>{return group.stones.length;}).reduce((a, b) => a + b, 0);
+        }
 
         //если нода пустая или текущий ход - последний в ветке         
         if( currentNode.value[currentNodeBranch.value].length==0 || currentNode.value[currentNodeBranch.value].length == currentMoveIndex+1)
