@@ -7,7 +7,7 @@ const props = defineProps({
   height:{type:Number, default:250}, //высота контейнера с SVG
 });
 
-const emit = defineEmits(['moveTo']);
+const emit = defineEmits(['moveTo', 'navigationPoints']);
 
 /**
  * строка стилевого оформления контейнера SVG
@@ -63,6 +63,42 @@ const movestreeVerticalIndent = ref(0);
  * Зафиксированные параметры курсора/сдвига SVG при "ручном" перетаскивании дерева ходов
  */
 const cursorCoords = ref({x:null, y:null, fixIndentX:null, fixIndentY:null});
+
+const navigationPoints = ref({
+    nextMove:null,
+    prevMove:null,
+});
+
+const calcNavigationPoints = ()=>{
+    //выделяем опорные точки для навигации по movestree
+
+    if(!props.game.currentMove) return;
+
+    let currentBranchIndex = branches.value.findIndex(branch => branch.moves.some(move=>move.id==props.game.currentMove.id));
+    if(currentBranchIndex<0) return;
+    let currentMoveIndex = branches.value[currentBranchIndex].moves.findIndex(move=>move.id==props.game.currentMove.id);
+    
+    let stepDown = currentMoveIndex;
+    let downWay = currentBranchIndex;
+    let stepUp = currentMoveIndex;
+    let upWay = currentBranchIndex;
+
+    for(let i=1; i<=10; i++){
+        stepDown--;
+        if (stepDown<0) {
+            //TODO пришли к началу ветки, переходим на родительскую если она есть или прекращаем цикл
+            break;
+        }
+        if (i==1) navigationPoints.value.prevMove = branches.value[downWay].moves[stepDown];
+    }
+    for(let i=1; i<=10; i++){
+        stepUp++;
+        if (!branches.value[upWay] || !branches.value[upWay].moves[stepUp]) break;
+        if (i==1) navigationPoints.value.nextMove = branches.value[upWay].moves[stepUp];
+    }
+    
+    emit('navigationPoints', navigationPoints.value);
+}
 
 /**
  * Размер камня в пикселях
@@ -267,13 +303,13 @@ const handleMouseClickLeft = ()=>{
     cursorCoords.value.fixIndentY=null;
 }
 
-const movestreeJson = computed(()=>{
-    return JSON.stringify(props.game.movestree);
+const currentMoveId = computed(()=>{
+    return props.game.currentMove.id;
 });
 
-watch(movestreeJson, ()=>{
+watch(currentMoveId, ()=>{
     branches.value = readBranch(props.game.movestree);
-    branchIndent.value=0;
+    calcNavigationPoints();
     calculateIndent();
 });
 

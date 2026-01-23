@@ -103,8 +103,10 @@ export default function () {
         if (coords.nodes!==null) {
             coords.nodes.forEach(node => {
                 let find = findNode[findIndex].find(move=>move.number==node.number);
-                findNode = find.children;
-                findIndex = node.branch;
+                if (find) {
+                    findNode = find.children;
+                    findIndex = node.branch;
+                }
             });
     
             currentNode.value = findNode;
