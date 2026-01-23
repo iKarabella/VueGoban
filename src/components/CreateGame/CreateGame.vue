@@ -63,7 +63,6 @@ const createGame = (cancel=false)=>{
     {
         createGameForm.value.overtime='FISHER'+time_settings.value.seconds;
     }
-    console.log('createComponent', createGameForm.value.goban_size);
     emit('createNewGame', createGameForm.value);
 }
 
@@ -120,7 +119,7 @@ const createGame = (cancel=false)=>{
 
                     <template #content>
                         <div v-for="(gsize, gindex) in goban_sizes" :key="gindex">
-                            <span @click="goban_size=gsize">{{ gsize }}</span>
+                            <span @click="goban_size=gsize" class="cursor-pointer">{{ gsize }}</span>
                         </div>
                     </template>
                 </Dropdown>
@@ -153,7 +152,7 @@ const createGame = (cancel=false)=>{
 
                     <template #content>
                         <div v-for="(rules, rindex) in available_rules" :key="rindex">
-                            <span @click="createGameForm.rules=rules">{{ rules }}</span>
+                            <span @click="createGameForm.rules=rules" class="cursor-pointer">{{ rules }}</span>
                         </div>
                     </template>
                 </Dropdown>
@@ -195,7 +194,7 @@ const createGame = (cancel=false)=>{
                 </template>
                 <template #content>
                     <div v-for="(control, cindex) in time_controls" :key="cindex">
-                        <span @click="time_settings.type=control">{{ control }}</span>
+                        <span @click="time_settings.type=control" class="cursor-pointer">{{ control }}</span>
                     </div>
                 </template>
             </Dropdown>
