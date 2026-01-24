@@ -15,8 +15,6 @@ export default function () {
         main_time: null, //Основное время в секундах
         overtime: null, //Контроль времени
         comment: null, //комментарий до первого хода
-        zero_white: [], //белые камни до первого хода 
-        zero_black: [], //черные камни до первого хода
         rules: 'Japanese', //Правила
     });
 
@@ -60,8 +58,6 @@ export default function () {
         settings.value.overtime = info.overtime;
         settings.value.rules = info.rules;
         settings.value.comment = null;
-        settings.value.zero_white = [];
-        settings.value.zero_black = [];
 
         game.value.movestree = [[]];
         game.value.ko = {coords:[], moveNum:null};
@@ -317,9 +313,49 @@ export default function () {
         console.log(`move(): ${performance.now() - start} мс`);
     }
 
+    const parse_sgf_settings = ref({
+        size: [19,19],
+        white_player_name: 'White',
+        white_player_rank: null,
+        black_player_name: 'Black',
+        black_player_rank: null,
+        game_date: null, //YYYY-MM-DD
+        game_result: null, //B+Resign
+        main_time: null, //Основное время в секундах
+        overtime: null, //Контроль времени
+        comment: null, //комментарий до первого хода
+        rules: 'Japanese', //Правила
+        visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
+    });
+
+    const parse_sgf_game = ref({
+        movestree: [ //Дерево ходов
+            [] //нулевая ветка
+        ],
+        ko: {coords:[], moveNum:null}, // ko
+        prisoners: [0,0], //счетчик пленников [черных, белых]
+        currentMode: 'black', //текущий режим (black, white, буквы, цифры)
+        currentMove: {}, //текущий ход
+        moveNumber: 0, //номер текущего хода
+        groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
+    });
+
+    const parse_sgf_movesCache = ref({}); //кэш game для ходов
+
+    const parse_sgf_currentNode = ref(game.value.movestree); //текущая нода из дерева ходов
+    const parse_sgf_currentNodeBranch = ref(0); //index текущей ветки ноды
+    const parse_sgf_groupId = ref(0);
+    const parse_sgf_moveId = ref(0);
+
+    /**
+     * Ошибки возникшие в процессе чтения
+     */
+    const parse_sgf_errors = ref([]);
+
     /**
      * Парсим SGF
-     * @param {String} sgf 
+     * @param {String} sgf строка
+     * @return {Object} объект с игрой для гобана
      */
     function parseSGF(sgf){ //TODO
         let currentSymb = '';
@@ -327,7 +363,6 @@ export default function () {
         let level          = 0;     //уровень чтения по '()'
         let currentBranch  = null;  //текущая ветка, ветки разделяются символами '()', но первая дочерняя ветка является частью родительской ветки
         let currentMove    = null;  //текущий ход (ходы разделяются символом ';', может быть несколько ходов с одним номером, если они находятся в разных ветках)
-        let text           = '';    //текст в []
         let squareBrackets = false; //строка в квадратных скобках (могут быть любые символы, но их просто пишем в text)
         let command        = '';    //Начало записи команды (записываем command до '[', потом пишем текст в [] в text, и на ']' - выполняем команду с текстом.)
         let commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
@@ -335,27 +370,120 @@ export default function () {
         for (let i = 0; i < sgf.length; i++) 
         {
             currentSymb = sgf.charAt(i);
-            if (commandSymbs.includes(currentSymb) && !squareBrackets) //команда
+            if (commandSymbs.includes(currentSymb) && squareBrackets===false) //команда
             {
                 command+=currentSymb; 
                 continue;
             }
-            else if (currentSymb=='[' && !squareBrackets) //начался текст команды
+            else if (currentSymb=='[' && squareBrackets===false) //начался текст команды
             {
-                squareBrackets = true; 
+                squareBrackets = ''; 
                 continue;
             }
-            else if (currentSymb==']' && prevSymbol!='\\' && squareBrackets) //закончился текст команды
+            else if (currentSymb==']' && prevSymbol!='\\' && squareBrackets!==false) //закончился текст команды
             {
-                //
+                commandSGF(command, squareBrackets);
+                squareBrackets = false;
+                if (sgf.charAt(i+1)!='[') command = '';
+                continue;
+            }
+            else if (squareBrackets!==false){ //Идет текст команды в []
+                squareBrackets+=currentSymb;
+                continue;
             }
 
             if (!currentSymb) prevSymbol = currentSymb;
-            if (squareBrackets && currentSymb!='\\') text+=currentSymb;
+        }
+
+        return {
+            settings : parse_sgf_errors.value.length>0 ? null : parse_sgf_settings.value, 
+            game : parse_sgf_errors.value.length>0 ? null : parse_sgf_game.value, 
+            errors : parse_sgf_errors.value.length>0 ? parse_sgf_errors.value : null
         }
     }
+    /**
+     * Функция исполняющая команды SGF при работе parseSGF()
+     * @param {string} command команда SGF
+     * @param {string} text текст для команды SGF
+     */
+    function commandSGF(command, text)
+    {
+        console.log('commandSGF', command, text);
+
+        if (command=='B') {}
+        else if (command=='W') {}
+        else if (command=='C') {}
+        // else if (command=='AP') {} // Приложение, в котором создан SGF файл
+        else if (command=='SZ') // Размер доски
+        {
+            let goban_size = text.split(':');
+            if (goban_size.length>2) {
+                parse_sgf_errors.value.push('Некорректный размер гобана');
+                return;
+            }
+            if (goban_size.length==1) goban_size.push(goban_size[0]);
+
+            goban_size = [parseInt(goban_size[0]), parseInt(goban_size[1])];
+
+            if(goban_size[0]<=52 && goban_size[0]>0 && goban_size[1]<=52 && goban_size[1]>0) parse_sgf_settings.value.size = goban_size;
+            else parse_sgf_errors.value.push('Ошибка чтения размера доски');
+        }
+        else if (command=='VW') // Видимая часть доски
+        {
+            let vw = text.split(':');
+
+            if (text=='') parse_sgf_settings.value.visible_vertices = [];
+            else if (vw.length==2) {
+                // Вычисляем диапазон ja : sj
+                let vw1 = abc.findIndex(s => s == vw[0].charAt(0));
+                let vw2 = abc.findIndex(s => s == vw[0].charAt(1));
+                let vw3 = abc.findIndex(s => s == vw[1].charAt(0));
+                let vw4 = abc.findIndex(s => s == vw[1].charAt(1));
+
+                if(vw1<0 || vw2<0 || vw3<0 || vw<0) {
+                    parse_sgf_errors.value.push('Некорректное значение VW');
+                    return;
+                }
+                
+                parse_sgf_settings.value.visible_vertices.push([[vw1+1, vw2+1],[vw3+1, vw4+1]]);
+            }
+            else if (vw.length==1) {
+                let vw1 = abc.findIndex(s => s == vw[0].charAt(0));
+                let vw2 = abc.findIndex(s => s == vw[0].charAt(1));
+                
+                if(vw1<0 || vw2<0) {
+                    errors.value.push('Некорректное значение VW');
+                    return;
+                }
+
+                settings.value.visible_vertices.push([[vw1+1, vw2+1]]);
+            }
+            else if (vw.length>2) {
+                parse_sgf_errors.value.push('Некорректное значение VW');
+                return;
+            }
+        }
+        // else if (command=='CA') {} // Кодировка файла
+        // else if (command=='HA') {} // Что за команда? Встретилась в SGF задачи
+        else if (command=='PB') // Имя игрока черными
+        {
+            parse_sgf_settings.value.black_player_name = text;
+        }
+        else if (command=='PW') // Имя игрока белыми
+        {
+            parse_sgf_settings.value.white_player_name = text;
+        }
+        else if (command=='AB') // Черные камни перед первым ходом
+        {
+            //
+        }
+        else if (command=='AW') {}
+        else if (command=='N') {}
+        // else if (command=='FF') {} //Версия файла
+        else if (command=='GM' && text!=='1') parse_sgf_errors.value.push('Запись не относится к игре "Го"');
+    };
 
     return {
-        settings, game, parseSGF, gobanAction, moveTo, createNewGame
+        settings, game, gobanAction, moveTo, createNewGame, parseSGF
     }
 }
