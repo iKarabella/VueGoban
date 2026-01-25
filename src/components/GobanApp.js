@@ -162,11 +162,11 @@ export default function () {
         /**
          * Доступные режимы для постановки камня
          */
-        const availableModes = ['black', 'white', 'blackStones', 'whiteStones'];
+        const availableModes = ['black', 'white', 'blackStone', 'whiteStone'];
 
         if(
             gameObject.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1])) //место занято
-            || (!availableModes.includes(gameObject.value.currentMode)) //текущий режим не подходит
+            || !availableModes.includes(gameObject.value.currentMode) //текущий режим не подходит
         ) return; 
 
         let currentMoveIndex = targetCurrentNode.value[targetCurrentNodeBranch.value].findIndex(arr=>{
@@ -198,10 +198,11 @@ export default function () {
 
         if (existInNextMoves) return;
 
-        let alter = gameObject.value.currentMode=='black'?'white':'black';
+        let alterColor = (gameObject.value.currentMode=='black' || gameObject.value.currentMode=='blackStone') ? 'white' : 'black';
+        let currentColor = (gameObject.value.currentMode=='black' || gameObject.value.currentMode=='blackStone') ? 'black' : 'white';
 
         let killed = gameObject.value.groups.filter((g)=>{ //ищем убитые этим ходом группы
-            return g.color==alter && g.dames.length==1 && g.dames[0][0]==coords[0] && g.dames[0][1]==coords[1];
+            return g.color==alterColor && g.dames.length==1 && g.dames[0][0]==coords[0] && g.dames[0][1]==coords[1];
         });
         
         if(gameObject.value.ko.moveNum<gameObject.value.moveNumber) gameObject.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
@@ -230,39 +231,39 @@ export default function () {
         if (coords[0]-1>0) {
             let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]-1 && s[1]==coords[1]));
             if (check)  {
-                if(check.color==alter) contrGroup.push([coords[0]-1, coords[1]]);
+                if(check.color == alterColor) contrGroup.push([coords[0]-1, coords[1]]);
             }
             else dames.push([coords[0]-1, coords[1]]);
         }
         if (coords[0]+1<=gameObject.value.size[0]) {
             let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]+1 && s[1]==coords[1]));
             if (check)  {
-                if(check.color==alter) contrGroup.push([coords[0]+1,coords[1]]);
+                if(check.color == alterColor) contrGroup.push([coords[0]+1,coords[1]]);
             }
             else dames.push([coords[0]+1,coords[1]]);
         }
         if (coords[1]-1>0) {
             let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]-1 && s[0]==coords[0]));
             if (check)  {
-                if(check.color==alter) contrGroup.push([coords[0], coords[1]-1]);
+                if(check.color == alterColor) contrGroup.push([coords[0], coords[1]-1]);
             }
             else dames.push([coords[0], coords[1]-1]);
         }
         if (coords[1]+1<=gameObject.value.size[1]) {
             let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]+1 && s[0]==coords[0]));
             if (check)  {
-                if(check.color==alter) contrGroup.push([coords[0],coords[1]+1]);
+                if(check.color == alterColor) contrGroup.push([coords[0],coords[1]+1]);
             }
             else dames.push([coords[0],coords[1]+1]);
         }
 
         let connectedGroups = gameObject.value.groups.filter((group)=>{
-            return group.color==gameObject.value.currentMode && group.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]);
+            return group.color == currentColor && group.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]);
         });
 
         let newGroup = {
             id:groupId.value,
-            color:gameObject.value.currentMode,
+            color:currentColor,
             dames:dames,
             stones:[coords],
             contrGroup:contrGroup,
@@ -301,7 +302,7 @@ export default function () {
             {
                 g.dames = g.dames.filter((d)=>!(d[0]==coords[0] && d[1]==coords[1]));
 
-                if (g.color==alter) {
+                if (g.color==alterColor) {
                     g.contrGroup.push(coords);
                 }
                 else {
@@ -316,7 +317,7 @@ export default function () {
         let vertex = `${abc[coords[0]-1]}${abc[coords[1]-1]}`;
 
         if(killed.length>0){
-            gameObject.value.prisoners[gameObject.value.currentMode=='black'?0:1]+=killed.map(group=>{return group.stones.length;}).reduce((a, b) => a + b, 0);
+            gameObject.value.prisoners[currentColor=='black' ? 0 : 1] += killed.map(group=>{return group.stones.length;}).reduce((a, b) => a + b, 0);
         }
 
         if (gameObject.value.currentMode=='black' || gameObject.value.currentMode=='white') 
@@ -343,7 +344,7 @@ export default function () {
                 targetCurrentNodeBranch.value = targetCurrentNode.value.length-1;
             }
         
-            gameObject.value.currentMode=alter;
+            gameObject.value.currentMode=alterColor;
             gameObject.value.moveNumber++;
             gameObject.value.currentMove = newMove;
     
@@ -458,7 +459,7 @@ export default function () {
         }
 
         if(parse_sgf_errors.value.length>0) console.log(parse_sgf_errors.value);
-        // else game.value = parse_sgf_game.value;
+        else game.value = parse_sgf_game.value;
     }
 
     /**
@@ -533,20 +534,20 @@ export default function () {
         }
         else if (command=='AB') // Черные камни перед первым ходом
         {
-            let cacheMode = parse_sgf_game.currentMode;
-            parse_sgf_game.currentMode = 'blackStone';
+            let cacheMode = parse_sgf_game.value.currentMode;
+            parse_sgf_game.value.currentMode = 'blackStone';
 
             let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
             move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
-            parse_sgf_game.currentMode = cacheMode;
+            parse_sgf_game.value.currentMode = cacheMode;
         }
         else if (command=='AW') {
-            let cacheMode = parse_sgf_game.currentMode;
-            parse_sgf_game.currentMode = 'whiteStone';
+            let cacheMode = parse_sgf_game.value.currentMode;
+            parse_sgf_game.value.currentMode = 'whiteStone';
 
             let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
             move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
-            parse_sgf_game.currentMode = cacheMode;
+            parse_sgf_game.value.currentMode = cacheMode;
         }
         else if (command=='N') {}
         // else if (command=='FF') {} //Версия файла
