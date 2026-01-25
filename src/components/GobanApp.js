@@ -110,6 +110,11 @@ export default function () {
         if (action.type=='move') move(action.coords);
     }
 
+    /**
+     * Переход к существующему ходу
+     * @param {Object} coords 
+     * @return {Void}
+     */
     function moveTo(coords){
         if(!coords) return;
         let cache = movesCache.value[coords.id];
@@ -142,17 +147,24 @@ export default function () {
         }
     }
 
-    function move(coords){
-
+    /**
+     * Постановка камня на доску
+     * @param {Array} coords координаты поставленного камня
+     * @param {Object} gameObject объект с данными об игре
+     * @return {Void}
+     */
+    function move(coords, gameObject = game){
         const start = performance.now();
 
+        const availableModes = ['black', 'white', 'blackStones', 'whiteStones'];
+
         if(
-            game.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1])) //место занято
-            || (game.value.currentMode!='black' && game.value.currentMode!='white') //текущий режим не для ходов
+            gameObject.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1])) //место занято
+            || (!availableModes.includes(gameObject.value.currentMode)) //текущий режим не подходит
         ) return; 
 
         let currentMoveIndex = currentNode.value[currentNodeBranch.value].findIndex(arr=>{
-            return arr.vertex==game.value.currentMove.vertex && arr.number==game.value.currentMove.number;
+            return arr.vertex==gameObject.value.currentMove.vertex && arr.number==gameObject.value.currentMove.number;
         });
 
         let nextMoveIndex = currentMoveIndex+1;
@@ -180,25 +192,25 @@ export default function () {
 
         if (existInNextMoves) return;
 
-        let alter = game.value.currentMode=='black'?'white':'black';
+        let alter = gameObject.value.currentMode=='black'?'white':'black';
 
-        let killed = game.value.groups.filter((g)=>{ //ищем убитые этим ходом группы
+        let killed = gameObject.value.groups.filter((g)=>{ //ищем убитые этим ходом группы
             return g.color==alter && g.dames.length==1 && g.dames[0][0]==coords[0] && g.dames[0][1]==coords[1];
         });
         
-        if(game.value.ko.moveNum<game.value.moveNumber) game.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
+        if(gameObject.value.ko.moveNum<gameObject.value.moveNumber) gameObject.value.ko = {coords:[], moveNum:null}; //сбрасываем ко после хода
 
         //проверяем на Ко
         if (
             killed.length==1 && 
             killed[0].stones.length==1 && 
-            game.value.ko.moveNum==game.value.moveNumber && 
-            (game.value.ko.coords[0]==coords[0] && game.value.ko.coords[1]==coords[1])
+            gameObject.value.ko.moveNum==gameObject.value.moveNumber && 
+            (gameObject.value.ko.coords[0]==coords[0] && gameObject.value.ko.coords[1]==coords[1])
         ) return; 
 
         if(killed.length>0){
             killed.forEach((k)=>{
-                game.value.groups = game.value.groups.filter((g)=>g.id!=k.id).map((g)=>{
+                gameObject.value.groups = gameObject.value.groups.filter((g)=>g.id!=k.id).map((g)=>{
                     let killedStones = g.contrGroup.filter((gc)=>k.stones.some((ks)=>ks[0] == gc[0] && ks[1] == gc[1]));
                     g.contrGroup = g.contrGroup.filter((gc)=>!k.stones.some((ks)=>ks[0] == gc[0] && ks[1] == gc[1]));
                     g.dames.push(...killedStones);
@@ -210,41 +222,41 @@ export default function () {
         let dames = [], contrGroup = [];
         
         if (coords[0]-1>0) {
-            let check = game.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]-1 && s[1]==coords[1]));
+            let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]-1 && s[1]==coords[1]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0]-1, coords[1]]);
             }
             else dames.push([coords[0]-1, coords[1]]);
         }
-        if (coords[0]+1<=game.value.size[0]) {
-            let check = game.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]+1 && s[1]==coords[1]));
+        if (coords[0]+1<=gameObject.value.size[0]) {
+            let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]+1 && s[1]==coords[1]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0]+1,coords[1]]);
             }
             else dames.push([coords[0]+1,coords[1]]);
         }
         if (coords[1]-1>0) {
-            let check = game.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]-1 && s[0]==coords[0]));
+            let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]-1 && s[0]==coords[0]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0], coords[1]-1]);
             }
             else dames.push([coords[0], coords[1]-1]);
         }
-        if (coords[1]+1<=game.value.size[1]) {
-            let check = game.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]+1 && s[0]==coords[0]));
+        if (coords[1]+1<=gameObject.value.size[1]) {
+            let check = gameObject.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]+1 && s[0]==coords[0]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0],coords[1]+1]);
             }
             else dames.push([coords[0],coords[1]+1]);
         }
 
-        let connectedGroups = game.value.groups.filter((group)=>{
-            return group.color==game.value.currentMode && group.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]);
+        let connectedGroups = gameObject.value.groups.filter((group)=>{
+            return group.color==gameObject.value.currentMode && group.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]);
         });
 
         let newGroup = {
             id:groupId.value,
-            color:game.value.currentMode,
+            color:gameObject.value.currentMode,
             dames:dames,
             stones:[coords],
             contrGroup:contrGroup,
@@ -273,12 +285,12 @@ export default function () {
         
         if(newGroup.dames.length<1) return; //у нет даме, нельзя поставить.
 
-        game.value.groups = game.value.groups.filter((g)=>!connectedGroups.map((cg)=>cg.id).includes(g.id));
-        game.value.groups.push(newGroup);
+        gameObject.value.groups = gameObject.value.groups.filter((g)=>!connectedGroups.map((cg)=>cg.id).includes(g.id));
+        gameObject.value.groups.push(newGroup);
         groupId.value++;
 
         //если в каких-то группах было даме c этими координатами -- убираем
-        game.value.groups = game.value.groups.map((g)=>{
+        gameObject.value.groups = gameObject.value.groups.map((g)=>{
             if(g.dames.some((d)=>d[0]==coords[0] && d[1]==coords[1]))
             {
                 g.dames = g.dames.filter((d)=>!(d[0]==coords[0] && d[1]==coords[1]));
@@ -297,50 +309,52 @@ export default function () {
 
         let vertex = `${abc[coords[0]-1]}${abc[coords[1]-1]}`;
 
-        moveId.value++;
-
-        let newMove = {
-            id:moveId.value,
-            number: game.value.moveNumber,
-            color: game.value.currentMode,
-            coords: coords,
-            vertex: vertex,
-            children:[],
-            marks:[],
-        };
-
         if(killed.length>0){
-            game.value.prisoners[game.value.currentMode=='black'?0:1]+=killed.map(group=>{return group.stones.length;}).reduce((a, b) => a + b, 0);
+            gameObject.value.prisoners[gameObject.value.currentMode=='black'?0:1]+=killed.map(group=>{return group.stones.length;}).reduce((a, b) => a + b, 0);
         }
 
-        //если нода пустая или текущий ход - последний в ветке         
-        if( currentNode.value[currentNodeBranch.value].length==0 || currentNode.value[currentNodeBranch.value].length == currentMoveIndex+1)
+        if (gameObject.value.currentMode=='black' || gameObject.value.currentMode=='white') 
         {
-            currentNode.value[currentNodeBranch.value].push(newMove);
+            moveId.value++;
+            
+            let newMove = {
+                id:moveId.value,
+                number: gameObject.value.moveNumber,
+                color: gameObject.value.currentMode,
+                coords: coords,
+                vertex: vertex,
+                children:[],
+                marks:[],
+            };
+            //если нода пустая или текущий ход - последний в ветке         
+            if( currentNode.value[currentNodeBranch.value].length==0 || currentNode.value[currentNodeBranch.value].length == currentMoveIndex+1)
+            {
+                    currentNode.value[currentNodeBranch.value].push(newMove);
+            }
+            else { //если ход заводит новую ветку
+                currentNode.value[currentNodeBranch.value][currentMoveIndex].children.push([newMove]);
+                currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
+                currentNodeBranch.value = currentNode.value.length-1;
+            }
+        
+            gameObject.value.currentMode=alter;
+            gameObject.value.moveNumber++;
+            gameObject.value.currentMove = newMove;
+    
+            if (killed.length==1 && killed[0].stones.length==1 && dames.length==1) {
+                gameObject.value.ko={coords:killed[0].stones[0], moveNum:game.value.moveNumber};
+            }
+    
+            movesCache.value[newMove.id] = JSON.stringify({
+                ko: gameObject.value.ko,
+                prisoners: gameObject.value.prisoners,
+                currentMode: gameObject.value.currentMode, 
+                currentMove: gameObject.value.currentMove,
+                moveNumber: gameObject.value.moveNumber, 
+                groups: gameObject.value.groups,
+                currentNodeBranch: currentNodeBranch.value
+            });
         }
-        else { //если ход заводит новую ветку
-            currentNode.value[currentNodeBranch.value][currentMoveIndex].children.push([newMove]);
-            currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
-            currentNodeBranch.value = currentNode.value.length-1;
-        }
-
-        game.value.currentMode=alter;
-        game.value.moveNumber++;
-        game.value.currentMove = newMove;
-
-        if (killed.length==1 && killed[0].stones.length==1 && dames.length==1) {
-            game.value.ko={coords:killed[0].stones[0], moveNum:game.value.moveNumber};
-        }
-
-        movesCache.value[newMove.id] = JSON.stringify({
-            ko: game.value.ko,
-            prisoners: game.value.prisoners,
-            currentMode: game.value.currentMode, 
-            currentMove: game.value.currentMove,
-            moveNumber: game.value.moveNumber, 
-            groups: game.value.groups,
-            currentNodeBranch: currentNodeBranch.value
-        });
 
         console.log(`move(): ${performance.now() - start} мс`);
     }
@@ -436,8 +450,6 @@ export default function () {
      */
     function commandSGF(command, text)
     {
-        console.log('commandSGF', command, text);
-
         if (command=='B') {}
         else if (command=='W') {}
         else if (command=='C') {}
@@ -503,7 +515,12 @@ export default function () {
         }
         else if (command=='AB') // Черные камни перед первым ходом
         {
-            //
+            let cacheMode = parse_sgf_game.currentMode;
+            parse_sgf_game.currentMode = 'blackStone';
+
+            let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
+            move(coords, parse_sgf_game);
+            parse_sgf_game.currentMode = cacheMode;
         }
         else if (command=='AW') {}
         else if (command=='N') {}

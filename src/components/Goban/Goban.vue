@@ -80,8 +80,8 @@ onBeforeMount(() => {
 
 const vertexCalc = function(){
     let comp_vertices = [];
-    for(let x=props.game.size[0]; x>0; x--) {
-        for(let y=1; y<=props.game.size[1]; y++){
+    for(let y=1; y<=props.game.size[1]; y++) {
+        for(let x=1; x<=props.game.size[0]; x++){
             comp_vertices.push({
                 coords: [x, y],
                 class:''
@@ -146,8 +146,8 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
                     <use v-for="e in group.stones" 
                         :href="group.color=='white'?'#white-1':'#black-1'" 
                         :opacity="e.opacity"
-                        :transform="`translate(${(fieldSize+(elSize+1)*(e[1]-1))}, ${(fieldSize+(elSize+1)*(game.size[0]-e[0]))})`"
-                    ></use>
+                        :transform="`translate(${(fieldSize+(elSize+1)*(e[0]-1))}, ${(fieldSize+(elSize+1)*(e[1]-1))})`"
+                    >{{ e }}</use>
                 </g>
             </g>
         </svg>
