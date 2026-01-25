@@ -4,7 +4,10 @@ import { ref, computed } from "vue";
 
 export default function () {
 
-    const settings = ref({
+    /**
+     * Информация об игре
+     */
+    const game = ref({
         size: [19,19],
         white_player_name: 'White',
         white_player_rank: null,
@@ -16,26 +19,44 @@ export default function () {
         overtime: null, //Контроль времени
         comment: null, //комментарий до первого хода
         rules: 'Japanese', //Правила
-    });
-
-    const game = ref({
-        movestree: [ //Дерево ходов
-            [] //нулевая ветка
-        ],
         ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
         currentMode: 'black', //текущий режим (black, white, буквы, цифры)
         currentMove: {}, //текущий ход
         moveNumber: 0, //номер текущего хода
         groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
+        visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
+        movestree: [ //Дерево ходов
+            [      //Нулевая ветка 
+                { //Нулевой ход
+                    id:null,
+                    number: null,
+                    color: null,
+                    coords: null,
+                    vertex: null,
+                    children:[],
+                    marks:[],
+                }
+            ]
+        ], 
     });
-
-    const movesCache = ref({}); //кэш game для ходов
 
     const currentNode = ref(game.value.movestree); //текущая нода из дерева ходов
     const currentNodeBranch = ref(0); //index текущей ветки ноды
     const groupId = ref(0);
     const moveId = ref(0);
+
+    const movesCache = ref({ //кэш game для ходов
+        null: JSON.stringify({ //"нулевой" ход
+            ko: {coords:[], moveNum:null},
+            prisoners: [0,0],
+            currentMode: 'black', 
+            currentMove: {},
+            moveNumber: 0, 
+            groups: game.value.groups,
+            currentNodeBranch: 0
+        })
+    });
 
     /**
      * Список буквенных координат SGF
@@ -47,19 +68,30 @@ export default function () {
      * @param {*} info 
      */
     function createNewGame(info){
-        settings.value.size = info.goban_size;
-        settings.value.white_player_name = info.white_player_name;
-        settings.value.white_player_rank = info.white_player_rank;
-        settings.value.black_player_name = info.black_player_name;
-        settings.value.black_player_rank = info.black_player_rank;
-        settings.value.game_date = info.game_date;
-        settings.value.game_result = info.game_result;
-        settings.value.main_time = info.main_time;
-        settings.value.overtime = info.overtime;
-        settings.value.rules = info.rules;
-        settings.value.comment = null;
-
-        game.value.movestree = [[]];
+        game.value.size = info.goban_size;
+        game.value.white_player_name = info.white_player_name;
+        game.value.white_player_rank = info.white_player_rank;
+        game.value.black_player_name = info.black_player_name;
+        game.value.black_player_rank = info.black_player_rank;
+        game.value.game_date = info.game_date;
+        game.value.game_result = info.game_result;
+        game.value.main_time = info.main_time;
+        game.value.overtime = info.overtime;
+        game.value.rules = info.rules;
+        game.value.comment = null;
+        game.value.movestree = [ //Дерево ходов
+            [      //Нулевая ветка 
+                { //Нулевой ход
+                    id:null,
+                    number: null,
+                    color: null,
+                    coords: null,
+                    vertex: null,
+                    children:[],
+                    marks:[],
+                }
+            ]
+        ];
         game.value.ko = {coords:[], moveNum:null};
         game.value.prisoners = [0,0];
         game.value.currentMode = 'black';
@@ -184,7 +216,7 @@ export default function () {
             }
             else dames.push([coords[0]-1, coords[1]]);
         }
-        if (coords[0]+1<=settings.value.size[0]) {
+        if (coords[0]+1<=game.value.size[0]) {
             let check = game.value.groups.find((g)=>g.stones.some((s)=>s[0]==coords[0]+1 && s[1]==coords[1]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0]+1,coords[1]]);
@@ -198,7 +230,7 @@ export default function () {
             }
             else dames.push([coords[0], coords[1]-1]);
         }
-        if (coords[1]+1<=settings.value.size[1]) {
+        if (coords[1]+1<=game.value.size[1]) {
             let check = game.value.groups.find((g)=>g.stones.some((s)=>s[1]==coords[1]+1 && s[0]==coords[0]));
             if (check)  {
                 if(check.color==alter) contrGroup.push([coords[0],coords[1]+1]);
@@ -313,7 +345,7 @@ export default function () {
         console.log(`move(): ${performance.now() - start} мс`);
     }
 
-    const parse_sgf_settings = ref({
+    const parse_sgf_game = ref({
         size: [19,19],
         white_player_name: 'White',
         white_player_rank: null,
@@ -326,9 +358,6 @@ export default function () {
         comment: null, //комментарий до первого хода
         rules: 'Japanese', //Правила
         visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
-    });
-
-    const parse_sgf_game = ref({
         movestree: [ //Дерево ходов
             [] //нулевая ветка
         ],
@@ -396,7 +425,6 @@ export default function () {
         }
 
         return {
-            settings : parse_sgf_errors.value.length>0 ? null : parse_sgf_settings.value, 
             game : parse_sgf_errors.value.length>0 ? null : parse_sgf_game.value, 
             errors : parse_sgf_errors.value.length>0 ? parse_sgf_errors.value : null
         }
@@ -425,14 +453,14 @@ export default function () {
 
             goban_size = [parseInt(goban_size[0]), parseInt(goban_size[1])];
 
-            if(goban_size[0]<=52 && goban_size[0]>0 && goban_size[1]<=52 && goban_size[1]>0) parse_sgf_settings.value.size = goban_size;
+            if(goban_size[0]<=52 && goban_size[0]>0 && goban_size[1]<=52 && goban_size[1]>0) parse_sgf_game.value.size = goban_size;
             else parse_sgf_errors.value.push('Ошибка чтения размера доски');
         }
         else if (command=='VW') // Видимая часть доски
         {
             let vw = text.split(':');
 
-            if (text=='') parse_sgf_settings.value.visible_vertices = [];
+            if (text=='') parse_sgf_game.value.visible_vertices = [];
             else if (vw.length==2) {
                 // Вычисляем диапазон ja : sj
                 let vw1 = abc.findIndex(s => s == vw[0].charAt(0));
@@ -445,7 +473,7 @@ export default function () {
                     return;
                 }
                 
-                parse_sgf_settings.value.visible_vertices.push([[vw1+1, vw2+1],[vw3+1, vw4+1]]);
+                parse_sgf_game.value.visible_vertices.push([[vw1+1, vw2+1],[vw3+1, vw4+1]]);
             }
             else if (vw.length==1) {
                 let vw1 = abc.findIndex(s => s == vw[0].charAt(0));
@@ -456,7 +484,7 @@ export default function () {
                     return;
                 }
 
-                settings.value.visible_vertices.push([[vw1+1, vw2+1]]);
+                game.value.visible_vertices.push([[vw1+1, vw2+1]]);
             }
             else if (vw.length>2) {
                 parse_sgf_errors.value.push('Некорректное значение VW');
@@ -467,11 +495,11 @@ export default function () {
         // else if (command=='HA') {} // Что за команда? Встретилась в SGF задачи
         else if (command=='PB') // Имя игрока черными
         {
-            parse_sgf_settings.value.black_player_name = text;
+            parse_sgf_game.value.black_player_name = text;
         }
         else if (command=='PW') // Имя игрока белыми
         {
-            parse_sgf_settings.value.white_player_name = text;
+            parse_sgf_game.value.white_player_name = text;
         }
         else if (command=='AB') // Черные камни перед первым ходом
         {
@@ -484,6 +512,6 @@ export default function () {
     };
 
     return {
-        settings, game, gobanAction, moveTo, createNewGame, parseSGF
+        game, gobanAction, moveTo, createNewGame, parseSGF
     }
 }

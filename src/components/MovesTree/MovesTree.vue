@@ -161,7 +161,7 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
             };
             if (addNodeNum!==null) newMove.nodes.push({number:addNodeNum, branch:branchIndex});
 
-            currentBranch.moves.unshift(newMove);
+            if (newMove.id!==null) currentBranch.moves.unshift(newMove);
 
             if (branch[i].children.length>0) //если есть дочерние ветки от этого хода
             {

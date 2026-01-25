@@ -9,7 +9,7 @@ import GameInfo from './components/GameInfo';
 import Modal from './UI/Modal.vue';
 import SecondaryButton from './UI/SecondaryButton.vue';
 
-const { settings, game, parseSGF, gobanAction, moveTo, createNewGame } = GobanApp();
+const { game, parseSGF, gobanAction, moveTo, createNewGame } = GobanApp();
 
 /**
  * Размеры экрана в пикселях
@@ -31,7 +31,9 @@ const leftColumnWidth = computed(()=>{
  * Размер гобана в пикселях
  */
 const gobanSizePx = ref(screenSize.height>screenSize.width?screenSize.width:screenSize.height);
-//const sgf = '(;GM[1]AP[StoneBase:SGFParser.3.0.1]SZ[19]VW[ja:sj]CA[utf-8]HA[0]PB[Black]PW[White]AB[pb][sb][pa][qa][pf][qf][pe][re][pd][rd][pc][ra]AW[sg][rg][rb][oa][qg][og][pg][of][rf][oe][se][od][sd][oc][qc][rc][ob][qb]N[黑先 死活题]C[创作者：陈禧](;B[qd];W[sf];B[sc]TE[1]C[CORRECT])(;B[sc];W[sa](;B[sc];W[sb];B[qd];W[qe])(;B[sb];W[sc];B[qd];W[sf]))(;B[sa];W[sc]))'
+
+//TODO temp
+const temp_sgf = '(;GM[1]AP[StoneBase:SGFParser.3.0.1]SZ[19]VW[ja:sj]CA[utf-8]HA[0]PB[Black]PW[White]AB[pb][sb][pa][qa][pf][qf][pe][re][pd][rd][pc][ra]AW[sg][rg][rb][oa][qg][og][pg][of][rf][oe][se][od][sd][oc][qc][rc][ob][qb]N[黑先 死活题]C[创作者：陈禧](;B[qd];W[sf];B[sc]TE[1]C[CORRECT])(;B[sc];W[sa](;B[sc];W[sb];B[qd];W[qe])(;B[sb];W[sc];B[qd];W[sf]))(;B[sa];W[sc]))'
 
 /**
  * Модальное окно с формой создания новой игры
@@ -63,13 +65,18 @@ const createNewGameFromForm = (newGame)=>{
 
 const handleGlobalKeydown = (event) => {
     if (!event.altKey && !event.shiftKey && !event.ctrlKey){
-        if (event.key=='ArrowLeft') moveTo(navigationPoints.value.prevMove);
+        if (event.key=='ArrowLeft') {
+            console.log('ArrLeft', game.value.currentMove.number);
+            moveTo(game.value.currentMove.number==0 ? {id:null, nodes:[]} : navigationPoints.value.prevMove);
+        }
         else if (event.key=='ArrowRight') moveTo(navigationPoints.value.nextMove);
     }
 };
 
 onMounted(() => {
     document.addEventListener('keydown', handleGlobalKeydown);
+
+    console.log(parseSGF(temp_sgf));
 });
 
 onUnmounted(() => {
@@ -80,15 +87,16 @@ onUnmounted(() => {
 <template>
     <div class="main_container">
         <div class="goban_container">
-            <Goban :size="gobanSizePx" :settings="settings" :game="game" @action="gobanAction"/>
+            <Goban :size="gobanSizePx" :game="game" @action="gobanAction"/>
             <Dashboard ref="dashboardBlock"/>
         </div>
         <div :style="`width: ${leftColumnWidth+40}px; padding:10px 20px; overflow-y:auto; overflow-x:hidden;`">
             <div class="flex flex-col gap-2" :style="`width:${leftColumnWidth}px;`">
-                <GameInfo :prisoners="game.prisoners" :gameInfo="settings"/>
+                <GameInfo :game="game"/>
                 <MovesTree :width="leftColumnWidth" :game="game" @moveTo="moveTo" @navigationPoints="updateNavigationPoints"/>
-                <div>
+                <div class="flex flex-wrap gap-2">
                     <SecondaryButton @click="createNewGameModal=true">Новая</SecondaryButton>
+                    <SecondaryButton>Сохранить SGF</SecondaryButton>
                 </div>
             </div>
         </div>

@@ -226,9 +226,12 @@ const createGame = (cancel=false)=>{
                 />
             </div>
         </div>
-        <div class="flex gap-2 mt-4">
-            <SecondaryButton @click="createGame(true)">Отменить</SecondaryButton>
-            <PrimaryButton @click="createGame()" :disabled="!canCreate">Создать</PrimaryButton>
+        <div class="flex gap-2 mt-4 justify-between">
+            <SecondaryButton>Загрузить SGF</SecondaryButton>
+            <div class="flex gap-2">
+                <SecondaryButton @click="createGame(true)">Отменить</SecondaryButton>
+                <PrimaryButton @click="createGame()" :disabled="!canCreate">Создать</PrimaryButton>
+            </div>
         </div>
     </div>
 </template>

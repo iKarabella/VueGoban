@@ -8,7 +8,6 @@ const props = defineProps({
     },
     showCoordinates:{type:Boolean, default:true},
     size:{type:Number, default:550},
-    settings:{type:Object},
     game:{type:Object}
 });
 
@@ -18,21 +17,21 @@ const alphabet = 'abcdefghjklmnopqrstuvwxyz';
 const size = computed(()=>{    
     for(let i = props.size; i>0; i--) //TODO может без цикла как-то можно это высчитать?
     {
-        let field = Math.round(i/(props.settings.size[0]+2));
+        let field = Math.round(i/(props.game.size[0]+2));
         if (field>35) field = 35;
-        let s = (i-field*2)/props.settings.size[0]-1;
+        let s = (i-field*2)/props.game.size[0]-1;
         if((s ^ 0) === s && s%2 !== 0) return i;
     }
     return props.size;
 });
 
 const fieldSize = computed(()=>{
-    let field = Math.round(size.value/(props.settings.size[0]+2));
+    let field = Math.round(size.value/(props.game.size[0]+2));
     return field > 35 ? 35 : field;
 });
 
 const elSize = computed(()=>{
-    return (size.value-fieldSize.value*2)/props.settings.size[0]-1;
+    return (size.value-fieldSize.value*2)/props.game.size[0]-1;
 });
 
 const svgSize = computed(()=>{
@@ -46,11 +45,11 @@ const gobanLines = computed(()=>{
     let ret = '';
     let halfSize = elSize.value/2;
 
-    for (let i = 0; i < props.settings.size[0]; i++) {
-        ret+=`M ${halfSize+fieldSize.value} ${halfSize+fieldSize.value+(elSize.value*i)+i} L ${(fieldSize.value+elSize.value*props.settings.size[0]+props.settings.size[0])-halfSize-1} ${halfSize+fieldSize.value+(elSize.value*i)+i} `;
+    for (let i = 0; i < props.game.size[0]; i++) {
+        ret+=`M ${halfSize+fieldSize.value} ${halfSize+fieldSize.value+(elSize.value*i)+i} L ${(fieldSize.value+elSize.value*props.game.size[0]+props.game.size[0])-halfSize-1} ${halfSize+fieldSize.value+(elSize.value*i)+i} `;
     }
-    for (let i = 0; i < props.settings.size[1]; i++) {
-       ret+=`M ${halfSize+fieldSize.value+(elSize.value*i)+i} ${halfSize+fieldSize.value} L ${halfSize+fieldSize.value+(elSize.value*i)+i} ${(fieldSize.value+elSize.value*props.settings.size[0]+props.settings.size[0])-halfSize-1} `;
+    for (let i = 0; i < props.game.size[1]; i++) {
+       ret+=`M ${halfSize+fieldSize.value+(elSize.value*i)+i} ${halfSize+fieldSize.value} L ${halfSize+fieldSize.value+(elSize.value*i)+i} ${(fieldSize.value+elSize.value*props.game.size[0]+props.game.size[0])-halfSize-1} `;
     }
 
     return ret;
@@ -67,8 +66,8 @@ const stars = computed(()=>{
         19: [{cx:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*4)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*10)-elSize.value/2}`},{cx:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*16)-elSize.value/2}`}]
     };
 
-    if(props.settings.size[0]==props.settings.size[1] && props.settings.size[0] % 2 !== 0){
-        return stars[props.settings.size[0]]!==undefined ? stars[props.settings.size[0]] : [{cx:`${(fieldSize.value-1+(elSize.value+1)*(props.settings.size[0]+1)/2)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*(props.settings.size[0]+1)/2)-elSize.value/2}`}]
+    if(props.game.size[0]==props.game.size[1] && props.game.size[0] % 2 !== 0){
+        return stars[props.game.size[0]]!==undefined ? stars[props.game.size[0]] : [{cx:`${(fieldSize.value-1+(elSize.value+1)*(props.game.size[0]+1)/2)-elSize.value/2}`, cy:`${(fieldSize.value-1+(elSize.value+1)*(props.game.size[0]+1)/2)-elSize.value/2}`}]
     }
     else return [];
 });
@@ -81,8 +80,8 @@ onBeforeMount(() => {
 
 const vertexCalc = function(){
     let comp_vertices = [];
-    for(let x=props.settings.size[0]; x>0; x--) {
-        for(let y=1; y<=props.settings.size[1]; y++){
+    for(let x=props.game.size[0]; x>0; x--) {
+        for(let y=1; y<=props.game.size[1]; y++){
             comp_vertices.push({
                 coords: [x, y],
                 class:''
@@ -93,7 +92,7 @@ const vertexCalc = function(){
 };
 
 const gobanSize = computed(()=>{
-    return JSON.stringify(props.settings.size);
+    return JSON.stringify(props.game.size);
 });
 
 watch(gobanSize, ()=>{
@@ -133,10 +132,10 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
                 <image id="white-1" :width="elSize+1" :height="elSize+1" :xlink:href="whiteStone"></image>
             </defs>
             <g>
-                <text style="text-transform: uppercase;" v-for="i in settings.size[0]" :x="(elSize/2+fieldSize+(elSize+1)*(i-1))-fieldSize/6" :y="fieldSize-1" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ alphabet[i-1] }}</text>
-                <text style="text-transform: uppercase;" v-for="i in settings.size[0]" :x="(elSize/2+fieldSize+(elSize+1)*(i-1))-fieldSize/6" :y="size-fieldSize/1.5" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ alphabet[i-1] }}</text>
-                <text style="text-transform: uppercase;" v-for="i in settings.size[1]" :x="fieldSize/2" :y="elSize/2+fieldSize+(elSize+1)*(i-1)+fieldSize/6" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ settings.size[1]-i+1 }}</text>
-                <text style="text-transform: uppercase;" v-for="i in settings.size[1]" :x="size-(fieldSize*0.9)" :y="elSize/2+fieldSize+(elSize+1)*(i-1)+fieldSize/6" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ settings.size[1]-i+1 }}</text>
+                <text style="text-transform: uppercase;" v-for="i in game.size[0]" :x="(elSize/2+fieldSize+(elSize+1)*(i-1))-fieldSize/6" :y="fieldSize-1" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ alphabet[i-1] }}</text>
+                <text style="text-transform: uppercase;" v-for="i in game.size[0]" :x="(elSize/2+fieldSize+(elSize+1)*(i-1))-fieldSize/6" :y="size-fieldSize/1.5" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ alphabet[i-1] }}</text>
+                <text style="text-transform: uppercase;" v-for="i in game.size[1]" :x="fieldSize/2" :y="elSize/2+fieldSize+(elSize+1)*(i-1)+fieldSize/6" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ game.size[1]-i+1 }}</text>
+                <text style="text-transform: uppercase;" v-for="i in game.size[1]" :x="size-(fieldSize*0.9)" :y="elSize/2+fieldSize+(elSize+1)*(i-1)+fieldSize/6" :font-size="`${fieldSize/2}px`" font-weight="bold" fill="#444444">{{ game.size[1]-i+1 }}</text>
             </g>
             <g>
                 <path :d="gobanLines" stroke="#442211" stroke-width="1px" stroke-linecap="square"></path>
@@ -147,17 +146,17 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
                     <use v-for="e in group.stones" 
                         :href="group.color=='white'?'#white-1':'#black-1'" 
                         :opacity="e.opacity"
-                        :transform="`translate(${(fieldSize+(elSize+1)*(e[1]-1))}, ${(fieldSize+(elSize+1)*(settings.size[0]-e[0]))})`"
+                        :transform="`translate(${(fieldSize+(elSize+1)*(e[1]-1))}, ${(fieldSize+(elSize+1)*(game.size[0]-e[0]))})`"
                     ></use>
                 </g>
             </g>
         </svg>
-        <div class="grid absolute" :style="`top: ${fieldSize}px; left:${fieldSize}px; grid-template-columns: repeat(${settings.size[0]}, ${elSize+1}px); grid-auto-rows: ${elSize+1}px;`">
+        <div class="grid absolute" :style="`top: ${fieldSize}px; left:${fieldSize}px; grid-template-columns: repeat(${game.size[0]}, ${elSize+1}px); grid-auto-rows: ${elSize+1}px;`">
             <div v-for="(v, index) in vertices" :key="index" :ref="`vertex${index}`"
                  @click="clickVertice(v.coords)"
                  @mouseover="hoverVertice(index)" 
                  @mouseout="hoverVertice(index, false)"
-                 :title="`${v.coords}`"
+                 :title="`${v.coords} ${alphabet[v.coords[0]-1]}${alphabet[v.coords[1]-1]}`"
                  :class="v.class"
             >
             </div>
