@@ -17,7 +17,6 @@ export default function () {
         game_result: null, //B+Resign
         main_time: null, //Основное время в секундах
         overtime: null, //Контроль времени
-        comment: null, //комментарий до первого хода
         rules: 'Japanese', //Правила
         ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
@@ -78,7 +77,6 @@ export default function () {
         game.value.main_time = info.main_time;
         game.value.overtime = info.overtime;
         game.value.rules = info.rules;
-        game.value.comment = null;
         game.value.movestree = [ //Дерево ходов
             [      //Нулевая ветка 
                 { //Нулевой ход
@@ -378,7 +376,6 @@ export default function () {
         game_result: null, //B+Resign
         main_time: null, //Основное время в секундах
         overtime: null, //Контроль времени
-        comment: null, //комментарий до первого хода
         rules: 'Japanese', //Правила
         visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
         movestree: [ //Дерево ходов
@@ -428,9 +425,6 @@ export default function () {
     function parseSGF(sgf){
         let currentSymb = '';
         let prevSymbol     = '';    //предыдущий символ
-        let level          = 0;     //уровень чтения по '()'
-        let currentBranch  = null;  //текущая ветка, ветки разделяются символами '()', но первая дочерняя ветка является частью родительской ветки
-        let currentMove    = null;  //текущий ход (ходы разделяются символом ';', может быть несколько ходов с одним номером, если они находятся в разных ветках)
         let squareBrackets = false; //строка в квадратных скобках (могут быть любые символы, но их просто пишем в text)
         let command        = '';    //Начало записи команды (записываем command до '[', потом пишем текст в [] в text, и на ']' - выполняем команду с текстом.)
         let commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
@@ -466,6 +460,7 @@ export default function () {
         if(parse_sgf_errors.value.length>0) console.log(parse_sgf_errors.value);
         // else game.value = parse_sgf_game.value;
     }
+
     /**
      * Функция исполняющая команды SGF при работе parseSGF()
      * @param {string} command команда SGF

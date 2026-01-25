@@ -147,7 +147,7 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
                         :href="group.color=='white'?'#white-1':'#black-1'" 
                         :opacity="e.opacity"
                         :transform="`translate(${(fieldSize+(elSize+1)*(e[0]-1))}, ${(fieldSize+(elSize+1)*(e[1]-1))})`"
-                    >{{ e }}</use>
+                    ></use>
                 </g>
             </g>
         </svg>
