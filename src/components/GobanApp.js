@@ -149,13 +149,21 @@ export default function () {
 
     /**
      * Постановка камня на доску
+     * 
      * @param {Array} coords координаты поставленного камня
      * @param {Object} gameObject объект с данными об игре
+     * @param {*} targetCurrentNode объект с текущим узлом
+     * @param {*} targetCurrentNodeBranch  объект с индексом ветки текущего узла
+     * @param {*} targetMovesCache  объект с кэшем ходов
      * @return {Void}
      */
-    function move(coords, gameObject = game){
+    function move(coords, gameObject = game, targetCurrentNode = currentNode, targetCurrentNodeBranch = currentNodeBranch, targetMovesCache = movesCache)
+    {
         const start = performance.now();
 
+        /**
+         * Доступные режимы для постановки камня
+         */
         const availableModes = ['black', 'white', 'blackStones', 'whiteStones'];
 
         if(
@@ -163,7 +171,7 @@ export default function () {
             || (!availableModes.includes(gameObject.value.currentMode)) //текущий режим не подходит
         ) return; 
 
-        let currentMoveIndex = currentNode.value[currentNodeBranch.value].findIndex(arr=>{
+        let currentMoveIndex = targetCurrentNode.value[targetCurrentNodeBranch.value].findIndex(arr=>{
             return arr.vertex==gameObject.value.currentMove.vertex && arr.number==gameObject.value.currentMove.number;
         });
 
@@ -171,19 +179,19 @@ export default function () {
         let existInNextMoves = false;
 
         if( //если ход в следующий существующий
-            currentNode.value[currentNodeBranch.value][nextMoveIndex] &&
-            currentNode.value[currentNodeBranch.value][nextMoveIndex].coords[0]==coords[0] &&
-            currentNode.value[currentNodeBranch.value][nextMoveIndex].coords[1]==coords[1]
+            targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex] &&
+            targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].coords[0]==coords[0] &&
+            targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].coords[1]==coords[1]
         ) {
             existInNextMoves = true;
-            moveTo({nodes:null, id:currentNode.value[currentNodeBranch.value][nextMoveIndex].id, number:currentNode.value[currentNodeBranch.value][nextMoveIndex].number});
+            moveTo({nodes:null, id:targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].id, number:targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].number});
         }
         else if(currentMoveIndex>=0) {
             //если ход в первый ход какой-то дочерней ветки текущего хода
-            currentNode.value[currentNodeBranch.value][currentMoveIndex].children.forEach((child, index)=>{
+            targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children.forEach((child, index)=>{
                 if(child[0].coords[0]==coords[0] && child[0].coords[1]==coords[1]) {
                     existInNextMoves = true;
-                    currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
+                    targetCurrentNode.value = targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children;
                     moveTo({nodes:null, id:child[0].id, number:child[0].number});
                     return;
                 }
@@ -327,14 +335,14 @@ export default function () {
                 marks:[],
             };
             //если нода пустая или текущий ход - последний в ветке         
-            if( currentNode.value[currentNodeBranch.value].length==0 || currentNode.value[currentNodeBranch.value].length == currentMoveIndex+1)
+            if( targetCurrentNode.value[targetCurrentNodeBranch.value].length==0 || targetCurrentNode.value[targetCurrentNodeBranch.value].length == currentMoveIndex+1)
             {
-                    currentNode.value[currentNodeBranch.value].push(newMove);
+                targetCurrentNode.value[targetCurrentNodeBranch.value].push(newMove);
             }
             else { //если ход заводит новую ветку
-                currentNode.value[currentNodeBranch.value][currentMoveIndex].children.push([newMove]);
-                currentNode.value = currentNode.value[currentNodeBranch.value][currentMoveIndex].children;
-                currentNodeBranch.value = currentNode.value.length-1;
+                targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children.push([newMove]);
+                targetCurrentNode.value = targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children;
+                targetCurrentNodeBranch.value = targetCurrentNode.value.length-1;
             }
         
             gameObject.value.currentMode=alter;
@@ -342,17 +350,17 @@ export default function () {
             gameObject.value.currentMove = newMove;
     
             if (killed.length==1 && killed[0].stones.length==1 && dames.length==1) {
-                gameObject.value.ko={coords:killed[0].stones[0], moveNum:game.value.moveNumber};
+                gameObject.value.ko={coords:killed[0].stones[0], moveNum:gameObject.value.moveNumber};
             }
     
-            movesCache.value[newMove.id] = JSON.stringify({
+            targetMovesCache.value[newMove.id] = JSON.stringify({
                 ko: gameObject.value.ko,
                 prisoners: gameObject.value.prisoners,
                 currentMode: gameObject.value.currentMode, 
                 currentMove: gameObject.value.currentMove,
                 moveNumber: gameObject.value.moveNumber, 
                 groups: gameObject.value.groups,
-                currentNodeBranch: currentNodeBranch.value
+                currentNodeBranch: targetCurrentNodeBranch.value
             });
         }
 
@@ -360,6 +368,7 @@ export default function () {
     }
 
     const parse_sgf_game = ref({
+        test_var_for_parse_sgf_game:true,
         size: [19,19],
         white_player_name: 'White',
         white_player_rank: null,
@@ -373,8 +382,18 @@ export default function () {
         rules: 'Japanese', //Правила
         visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
         movestree: [ //Дерево ходов
-            [] //нулевая ветка
-        ],
+            [      //Нулевая ветка 
+                { //Нулевой ход
+                    id:null,
+                    number: null,
+                    color: null,
+                    coords: null,
+                    vertex: null,
+                    children:[],
+                    marks:[],
+                }
+            ]
+        ], 
         ko: {coords:[], moveNum:null}, // ko
         prisoners: [0,0], //счетчик пленников [черных, белых]
         currentMode: 'black', //текущий режим (black, white, буквы, цифры)
@@ -382,13 +401,19 @@ export default function () {
         moveNumber: 0, //номер текущего хода
         groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
     });
-
-    const parse_sgf_movesCache = ref({}); //кэш game для ходов
-
-    const parse_sgf_currentNode = ref(game.value.movestree); //текущая нода из дерева ходов
+    const parse_sgf_currentNode = ref(parse_sgf_game.value.movestree); //текущая нода из дерева ходов
     const parse_sgf_currentNodeBranch = ref(0); //index текущей ветки ноды
-    const parse_sgf_groupId = ref(0);
-    const parse_sgf_moveId = ref(0);
+    const parse_sgf_movesCache = ref({ //кэш game для ходов
+        null: JSON.stringify({ //"нулевой" ход
+            ko: {coords:[], moveNum:null},
+            prisoners: [0,0],
+            currentMode: 'black', 
+            currentMove: {},
+            moveNumber: 0, 
+            groups: parse_sgf_game.value.groups,
+            currentNodeBranch: 0
+        })
+    });
 
     /**
      * Ошибки возникшие в процессе чтения
@@ -398,9 +423,9 @@ export default function () {
     /**
      * Парсим SGF
      * @param {String} sgf строка
-     * @return {Object} объект с игрой для гобана
+     * @return {Void}
      */
-    function parseSGF(sgf){ //TODO
+    function parseSGF(sgf){
         let currentSymb = '';
         let prevSymbol     = '';    //предыдущий символ
         let level          = 0;     //уровень чтения по '()'
@@ -438,10 +463,8 @@ export default function () {
             if (!currentSymb) prevSymbol = currentSymb;
         }
 
-        return {
-            game : parse_sgf_errors.value.length>0 ? null : parse_sgf_game.value, 
-            errors : parse_sgf_errors.value.length>0 ? parse_sgf_errors.value : null
-        }
+        if(parse_sgf_errors.value.length>0) console.log(parse_sgf_errors.value);
+        // else game.value = parse_sgf_game.value;
     }
     /**
      * Функция исполняющая команды SGF при работе parseSGF()
@@ -519,10 +542,17 @@ export default function () {
             parse_sgf_game.currentMode = 'blackStone';
 
             let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
-            move(coords, parse_sgf_game);
+            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
             parse_sgf_game.currentMode = cacheMode;
         }
-        else if (command=='AW') {}
+        else if (command=='AW') {
+            let cacheMode = parse_sgf_game.currentMode;
+            parse_sgf_game.currentMode = 'whiteStone';
+
+            let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
+            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
+            parse_sgf_game.currentMode = cacheMode;
+        }
         else if (command=='N') {}
         // else if (command=='FF') {} //Версия файла
         else if (command=='GM' && text!=='1') parse_sgf_errors.value.push('Запись не относится к игре "Го"');
