@@ -12,7 +12,9 @@ const props = defineProps({
         default:['19*19', '13*13', '9*9']
     }
 });
-const emit = defineEmits(['createNewGame']);
+const emit = defineEmits(['createNewGame', 'createNewGameFromSGF']);
+
+const file_sgf = ref();
 
 const available_rules = ['Японские', 'Китайские'];
 const time_controls = ['Беёми', 'Абсолют', 'Фишер'];
@@ -64,6 +66,24 @@ const createGame = (cancel=false)=>{
         createGameForm.value.overtime='FISHER'+time_settings.value.seconds;
     }
     emit('createNewGame', createGameForm.value);
+}
+
+const loadSgf = ()=>{
+    file_sgf.value.click()
+}
+const readSgf = (event)=>{
+
+    const file = event.target.files[0];
+    if (!file || (file.type!='' && file.type!='text/plain') || file.size>51200) return;
+
+    const reader = new FileReader();
+
+    reader.readAsText(file);
+    reader.onload = () => {
+        if (reader.result.charAt(0)=='(') {
+            emit('createNewGame', reader.result);
+        }
+    }
 }
 
 </script>
@@ -227,7 +247,8 @@ const createGame = (cancel=false)=>{
             </div>
         </div>
         <div class="flex gap-2 mt-4 justify-between">
-            <SecondaryButton>Загрузить SGF</SecondaryButton>
+            <input type="file" ref="file_sgf" @change="readSgf" style="display:none;"/>
+            <SecondaryButton @click="loadSgf">Загрузить SGF</SecondaryButton>
             <div class="flex gap-2">
                 <SecondaryButton @click="createGame(true)">Отменить</SecondaryButton>
                 <PrimaryButton @click="createGame()" :disabled="!canCreate">Создать</PrimaryButton>
