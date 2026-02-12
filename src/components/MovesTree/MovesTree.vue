@@ -156,7 +156,8 @@ const readBranch = function(node, parentIndent=0)
             let newMove = {
                 number:branch[i].number+1, 
                 color:branch[i].color, 
-                id:branch[i].id
+                id:branch[i].id,
+                vertex:branch[i].vertex
             };
 
             if (newMove.id!==null) currentBranch.moves.unshift(newMove);
@@ -345,7 +346,7 @@ watch(watcherCondition, ()=>{
                         :ref="`moveid_${move.id}`"
                     ></use>
                     <circle v-if="move.id==game.currentMove.id" :cx="elSize/2+(elSize+5)*mi" :cy="elSize/2+(elSize+5)*bi" :r="elSize/2" fill="none" :stroke="move.color=='black'?'#ffffff':'#000000'" stroke-width="1px"></circle>
-                    <text :x="fontSize+(elSize+5)*mi" :y="(fontSize+1)+(elSize+5)*bi" :width="elSize" :height="elSize" 
+                    <text v-if="move.vertex!=null" :x="fontSize+(elSize+5)*mi" :y="(fontSize+1)+(elSize+5)*bi" :width="elSize" :height="elSize" 
                         :font-size="`${fontSize}px`" :fill="move.color=='black'?'#ffffff':'#000000'" font-weight="bold" 
                         alignment-baseline="middle" text-anchor="middle" dominant-baseline="middle">
                         {{move.number}}
