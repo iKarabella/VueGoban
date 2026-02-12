@@ -80,7 +80,7 @@ onBeforeMount(() => {
 
 const vertexCalc = function(){
     let comp_vertices = [];
-    for(let y=1; y<=props.game.size[1]; y++) {
+    if (props.game && props.game.size) for(let y=1; y<=props.game.size[1]; y++) {
         for(let x=1; x<=props.game.size[0]; x++){
             comp_vertices.push({
                 coords: [x, y],
@@ -125,7 +125,7 @@ const blackStone = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAAfCAYAAA
 </script>
 
 <template>
-    <div class="goban-container">
+    <div class="goban-container" v-if="game.size">
         <svg :width="`${svgSize.width}px`" :height="`${svgSize.height}px`" style="border:1px solid gray">
             <defs>
                 <image id="black-1" :width="elSize+1" :height="elSize+1" :xlink:href="blackStone"></image>

@@ -1,10 +1,23 @@
 <script setup>
-    import { computed } from 'vue';
+import { computed } from 'vue';
 
-    const props = defineProps({
-        game:{type:Object, default: {}},
-    });
-    const emit = defineEmits({revertColors:null});
+const props = defineProps({
+    game:{type:Object, default: {
+        black_player_name:'Black',
+        white_player_name:'White',
+        prisoners:[0,0]
+    }},
+});
+const emit = defineEmits({revertColors:null});
+
+const blackPrisoners = computed(()=>{
+    if (!props.game.prisoners || !props.game.prisoners.length) return 0;
+    return props.game.prisoners[0];
+});
+const whitePrisoners = computed(()=>{
+    if (!props.game.prisoners || !props.game.prisoners.length) return 0;
+    return props.game.prisoners[1];
+});
 </script>
 <template>
     <div>
@@ -16,7 +29,7 @@
                     </div>
                 </div>
                 <div class="w-full block mt-2">
-                    <span>{{ game.prisoners[0] }} {{ game.prisoners[0]==1?'пленный':'пленных' }}</span>
+                    <span>{{ blackPrisoners }} {{ blackPrisoners==1?'пленный':'пленных' }}</span>
                 </div>
             </div>
             <div class="w-6/12 relative rounded border border-gray-500 p-4 ml-2 bg-gray-100">
@@ -26,7 +39,7 @@
                     </div>
                 </div>
                 <div class="w-full block mt-2">
-                    <span>{{ game.prisoners[1] }} {{ game.prisoners[1]==1?'пленный':'пленных' }}</span>
+                    <span>{{ whitePrisoners }} {{ whitePrisoners==1?'пленный':'пленных' }}</span>
                 </div>
             </div>
         </div>

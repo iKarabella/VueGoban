@@ -7,55 +7,15 @@ export default function () {
     /**
      * Информация об игре
      */
-    const game = ref({
-        size: [19,19],
-        white_player_name: 'White',
-        white_player_rank: null,
-        black_player_name: 'Black',
-        black_player_rank: null,
-        game_date: null, //YYYY-MM-DD
-        game_result: null, //B+Resign
-        main_time: null, //Основное время в секундах
-        overtime: null, //Контроль времени
-        rules: 'Japanese', //Правила
-        ko: {coords:[], moveNum:null}, // ko
-        prisoners: [0,0], //счетчик пленников [черных, белых]
-        currentMode: 'black', //текущий режим (black, white, буквы, цифры)
-        currentMove: {}, //текущий ход
-        moveNumber: 0, //номер текущего хода
-        groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
-        visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
-        movestree: [ //Дерево ходов
-            [      //Нулевая ветка 
-                { //Нулевой ход
-                    id:null,
-                    number: null,
-                    color: null,
-                    coords: null,
-                    vertex: null,
-                    children:[],
-                    marks:[],
-                }
-            ]
-        ], 
-    });
+    const game = ref({});
 
-    const currentNode = ref(game.value.movestree); //текущая нода из дерева ходов
-    const currentNodeBranch = ref(0); //index текущей ветки ноды
+    const currentNode = ref({}); //текущая нода из дерева ходов
+    const currentNodeBranch = ref(null); //index текущей ветки ноды
+    const currentNodes = ref([]); //текущие ноды
     const groupId = ref(0);
     const moveId = ref(0);
 
-    const movesCache = ref({ //кэш game для ходов
-        null: JSON.stringify({ //"нулевой" ход
-            ko: {coords:[], moveNum:null},
-            prisoners: [0,0],
-            currentMode: 'black', 
-            currentMove: {},
-            moveNumber: 0, 
-            groups: game.value.groups,
-            currentNodeBranch: 0
-        })
-    });
+    const movesCache = ref({});
 
     /**
      * Список буквенных координат SGF
@@ -64,44 +24,55 @@ export default function () {
 
     /**
      * Создание новой игры
-     * @param {*} info 
+     * 
+     * @param {*} info Информация об игре
+     * @param {*} targetGame ссылка на объект с игрой
+     * @param {*} targetMovesCache ссылка на кэш ходов
+     * @param {*} targetCurrentNode ссылка на текущий узел
+     * @param {*} targetCurrentNodeBranch ссылка на индекс текущей ветку
+     * @param {*} targetCurrentNodes ссылка на узлы текущего хода
+     * @param {*} targetGroupId ссылка на счетчик групп
+     * @param {*} targetMoveId ссылка на счетчик ходов
      */
-    function createNewGame(info){
-        game.value.size = info.goban_size;
-        game.value.white_player_name = info.white_player_name;
-        game.value.white_player_rank = info.white_player_rank;
-        game.value.black_player_name = info.black_player_name;
-        game.value.black_player_rank = info.black_player_rank;
-        game.value.game_date = info.game_date;
-        game.value.game_result = info.game_result;
-        game.value.main_time = info.main_time;
-        game.value.overtime = info.overtime;
-        game.value.rules = info.rules;
-        game.value.movestree = [ //Дерево ходов
-            [      //Нулевая ветка 
-                { //Нулевой ход
-                    id:null,
-                    number: null,
-                    color: null,
-                    coords: null,
-                    vertex: null,
-                    children:[],
-                    marks:[],
-                }
-            ]
-        ];
-        game.value.ko = {coords:[], moveNum:null};
-        game.value.prisoners = [0,0];
-        game.value.currentMode = 'black';
-        game.value.currentMove =  {};
-        game.value.moveNumber = 0;
-        game.value.groups = [];
+    function createNewGame(info={}, targetGame=game, targetMovesCache = movesCache, targetCurrentNode = currentNode, targetCurrentNodeBranch=currentNodeBranch, targetCurrentNodes=currentNodes, targetGroupId = groupId, targetMoveId = moveId)
+    {
+        targetGame.value.size = info.goban_size??[19,19];
+        targetGame.value.white_player_name = info.white_player_name??'White';
+        targetGame.value.white_player_rank = info.white_player_rank??null;
+        targetGame.value.black_player_name = info.black_player_name??'Black';
+        targetGame.value.black_player_rank = info.black_player_rank??null;
+        targetGame.value.game_date = info.game_date??null;
+        targetGame.value.game_result = info.game_result??null;
+        targetGame.value.main_time = info.main_time??null;
+        targetGame.value.overtime = info.overtime??null;
+        targetGame.value.rules = info.rules??'Japanese';
+        targetGame.value.movestree = [];//Дерево ходов
+        targetGame.value.ko = {coords:[], moveNum:null};
+        targetGame.value.prisoners = [0,0];
+        targetGame.value.currentMode = 'black';
+        targetGame.value.currentMove =  {};
+        targetGame.value.moveNumber = 0;
+        targetGame.value.groups = [];
+        targetGame.value.comment = info.comment??''; //комментарий к нулевому ходу
 
-        movesCache.value={};
-        currentNode.value = game.value.movestree;
-        currentNodeBranch.value = 0;
-        groupId.value = 0;
-        moveId.value = 0;
+        targetCurrentNodes.value = [];
+        targetMovesCache.value={
+            null: JSON.stringify({ //"нулевой" ход
+                ko: {coords:[], moveNum:null},
+                nodes:[],
+                prisoners: [0,0],
+                currentMode: 'black', 
+                currentMove: {},
+                moveNumber: 0, 
+                groups: targetGame.value.groups,
+                currentNodeBranch: null,
+                comment:''
+            })
+        };
+        targetCurrentNode.value = targetGame.value.movestree;
+        targetCurrentNodeBranch.value = null;
+        targetGroupId.value = 0;
+        targetMoveId.value = 0;
     }
 
     function gobanAction(action){
@@ -110,39 +81,58 @@ export default function () {
 
     /**
      * Переход к существующему ходу
-     * @param {Object} coords 
+     * @param {*} move Id 
+     * @param {*} targetGame объект с данными об игре
+     * @param {*} targetCurrentNode объект с текущим узлом
+     * @param {*} targetCurrentNodeBranch  объект с индексом ветки текущего узла
+     * @param {*} targetMovesCache  объект с кэшем ходов
+     * @param {*} targetNodes  узлы текущего хода
      * @return {Void}
      */
-    function moveTo(coords){
-        if(!coords) return;
-        let cache = movesCache.value[coords.id];
+    function moveTo(moveId, targetGame = game, targetCurrentNode = currentNode, targetCurrentNodeBranch = currentNodeBranch, targetMovesCache = movesCache, targetNodes = currentNodes)
+    {
+        let cache = targetMovesCache.value[moveId];
         if(!cache) return;
 
         cache = JSON.parse(cache);
 
-        game.value.ko = cache.ko;
-        game.value.prisoners = cache.prisoners;
-        game.value.currentMode = cache.currentMode; 
-        game.value.currentMove = cache.currentMove;
-        game.value.moveNumber = cache.moveNumber;
-        game.value.groups = cache.groups;
-        currentNodeBranch.value = cache.currentNodeBranch;
+        let findNode = targetGame.value.movestree;
+        let findIndex = null;
 
-        let findNode = game.value.movestree;
-        let findIndex = 0;
-
-        if (coords.nodes!==null) {
-            coords.nodes.forEach(node => {
-                let find = findNode[findIndex].find(move=>move.number==node.number);
-                if (find) {
-                    findNode = find.children;
+        if (cache.nodes) {
+            cache.nodes.forEach(node => {
+                if(node.number!==null)
+                {
+                    let find = findNode[findIndex].find(move=>move.number==node.number);
+                    if (find) {
+                        findNode = find.children;
+                        findIndex = node.branch;
+                    }
+                }
+                else {
                     findIndex = node.branch;
                 }
+                
             });
-    
-            currentNode.value = findNode;
-            currentNodeBranch.value = findIndex;
         }
+
+        if(moveId!==null && findIndex!==null)
+        {
+            targetGame.value.currentMove = findNode[findIndex].find(move=>move.id==moveId);
+        }
+        else {
+            targetGame.value.currentMove = cache.currentMove;
+        }
+
+        targetCurrentNode.value = findNode;
+        targetCurrentNodeBranch.value = findIndex;
+
+        targetGame.value.ko = cache.ko;
+        targetGame.value.prisoners = cache.prisoners;
+        targetGame.value.currentMode = cache.currentMode; 
+        targetGame.value.moveNumber = cache.moveNumber;
+        targetGame.value.groups = cache.groups;
+        targetNodes.value = cache.nodes;
     }
 
     /**
@@ -153,47 +143,77 @@ export default function () {
      * @param {*} targetCurrentNode объект с текущим узлом
      * @param {*} targetCurrentNodeBranch  объект с индексом ветки текущего узла
      * @param {*} targetMovesCache  объект с кэшем ходов
+     * @param {*} targetNodes  узлы текущего хода
      * @return {Void}
      */
-    function move(coords, gameObject = game, targetCurrentNode = currentNode, targetCurrentNodeBranch = currentNodeBranch, targetMovesCache = movesCache)
+    function move(coords, gameObject = game, targetCurrentNode = currentNode, targetCurrentNodeBranch = currentNodeBranch, targetMovesCache = movesCache, targetNodes = currentNodes)
     {
         const start = performance.now();
-
         /**
          * Доступные режимы для постановки камня
          */
         const availableModes = ['black', 'white', 'blackStone', 'whiteStone'];
+        let currentMoveIndex = -1;
 
         if(
             gameObject.value.groups.some((g)=>g.stones.some((s)=>s[0]==coords[0] && s[1]==coords[1])) //место занято
             || !availableModes.includes(gameObject.value.currentMode) //текущий режим не подходит
-        ) return; 
+        ) return;
 
-        let currentMoveIndex = targetCurrentNode.value[targetCurrentNodeBranch.value].findIndex(arr=>{
-            return arr.vertex==gameObject.value.currentMove.vertex && arr.number==gameObject.value.currentMove.number;
-        });
-
+        if (targetCurrentNodeBranch.value!==null) {
+            currentMoveIndex = targetCurrentNode.value[targetCurrentNodeBranch.value].findIndex(arr=>{
+                return arr.vertex==gameObject.value.currentMove.vertex && arr.number==gameObject.value.currentMove.number;
+            });
+        }
         let nextMoveIndex = currentMoveIndex+1;
+
         let existInNextMoves = false;
 
         if( //если ход в следующий существующий
+            targetCurrentNodeBranch.value!==null && 
             targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex] &&
             targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].coords[0]==coords[0] &&
             targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].coords[1]==coords[1]
         ) {
             existInNextMoves = true;
-            moveTo({nodes:null, id:targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].id, number:targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].number});
+            moveTo(
+                targetCurrentNode.value[targetCurrentNodeBranch.value][nextMoveIndex].id, 
+                gameObject, 
+                targetCurrentNode, 
+                targetCurrentNodeBranch,
+                targetMovesCache, 
+                targetNodes
+            );
         }
-        else if(currentMoveIndex>=0) {
-            //если ход в первый ход какой-то дочерней ветки текущего хода
-            targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children.forEach((child, index)=>{
-                if(child[0].coords[0]==coords[0] && child[0].coords[1]==coords[1]) {
-                    existInNextMoves = true;
-                    targetCurrentNode.value = targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children;
-                    moveTo({nodes:null, id:child[0].id, number:child[0].number});
-                    return;
-                }
-            });
+
+        let currentNodeMove = null;
+        if(targetCurrentNodeBranch.value!==null && currentMoveIndex>=0) {
+            currentNodeMove = targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children;
+        }
+        else currentNodeMove = game.value.movestree;  //TODO заменить на gameObject. но возникает ошибка в parseSGF (некорректно ветки делает)
+        
+        //если ход в первый ход какой-то дочерней ветки текущего хода - переходим туда
+        currentNodeMove.forEach((child, index)=>{
+            if(child.length && child[0].coords[0]==coords[0] && child[0].coords[1]==coords[1]) {
+                existInNextMoves = true;
+                targetCurrentNode.value = child.children;
+                moveTo(
+                    child[0].id, 
+                    gameObject, 
+                    targetCurrentNode, 
+                    targetCurrentNodeBranch,
+                    targetMovesCache, 
+                    targetNodes
+                );
+                return;
+            }
+        });
+
+        if(targetCurrentNodeBranch.value===null)
+        {
+            targetCurrentNode.value.push([]);
+            targetCurrentNodeBranch.value = targetCurrentNode.value.length-1;
+            targetNodes.value.push({number:null, branch:targetCurrentNode.value.length-1});
         }
 
         if (existInNextMoves) return;
@@ -332,14 +352,20 @@ export default function () {
                 vertex: vertex,
                 children:[],
                 marks:[],
+                comment:''
             };
-            //если нода пустая или текущий ход - последний в ветке         
+
+            //если нода пустая или текущий ход - последний в ветке    
             if( targetCurrentNode.value[targetCurrentNodeBranch.value].length==0 || targetCurrentNode.value[targetCurrentNodeBranch.value].length == currentMoveIndex+1)
             {
                 targetCurrentNode.value[targetCurrentNodeBranch.value].push(newMove);
             }
             else { //если ход заводит новую ветку
                 targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children.push([newMove]);
+                targetNodes.value.push({
+                    number:gameObject.value.currentMove.number??null, 
+                    branch:targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children.length-1
+                });
                 targetCurrentNode.value = targetCurrentNode.value[targetCurrentNodeBranch.value][currentMoveIndex].children;
                 targetCurrentNodeBranch.value = targetCurrentNode.value.length-1;
             }
@@ -354,6 +380,7 @@ export default function () {
     
             targetMovesCache.value[newMove.id] = JSON.stringify({
                 ko: gameObject.value.ko,
+                nodes: targetNodes.value,
                 prisoners: gameObject.value.prisoners,
                 currentMode: gameObject.value.currentMode, 
                 currentMove: gameObject.value.currentMove,
@@ -362,104 +389,147 @@ export default function () {
                 currentNodeBranch: targetCurrentNodeBranch.value
             });
         }
+        else {
+            let cache = JSON.parse(targetMovesCache.value[gameObject.value.currentMove.id??null]);
+            cache.groups = gameObject.value.groups;
+            cache.prisoners = gameObject.value.prisoners;
+            cache.nodes = currentNodes.value;
+            targetMovesCache.value[gameObject.value.currentMove.id??null] = JSON.stringify(cache);
+        }
 
         console.log(`move(): ${performance.now() - start} мс`);
     }
 
-    const parse_sgf_game = ref({
-        test_var_for_parse_sgf_game:true,
-        size: [19,19],
-        white_player_name: 'White',
-        white_player_rank: null,
-        black_player_name: 'Black',
-        black_player_rank: null,
-        game_date: null, //YYYY-MM-DD
-        game_result: null, //B+Resign
-        main_time: null, //Основное время в секундах
-        overtime: null, //Контроль времени
-        rules: 'Japanese', //Правила
-        visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
-        movestree: [ //Дерево ходов
-            [      //Нулевая ветка 
-                { //Нулевой ход
-                    id:null,
-                    number: null,
-                    color: null,
-                    coords: null,
-                    vertex: null,
-                    children:[],
-                    marks:[],
-                }
-            ]
-        ], 
-        ko: {coords:[], moveNum:null}, // ko
-        prisoners: [0,0], //счетчик пленников [черных, белых]
-        currentMode: 'black', //текущий режим (black, white, буквы, цифры)
-        currentMove: {}, //текущий ход
-        moveNumber: 0, //номер текущего хода
-        groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
-    });
-    const parse_sgf_currentNode = ref(parse_sgf_game.value.movestree); //текущая нода из дерева ходов
-    const parse_sgf_currentNodeBranch = ref(0); //index текущей ветки ноды
-    const parse_sgf_movesCache = ref({ //кэш game для ходов
-        null: JSON.stringify({ //"нулевой" ход
-            ko: {coords:[], moveNum:null},
-            prisoners: [0,0],
-            currentMode: 'black', 
-            currentMove: {},
-            moveNumber: 0, 
-            groups: parse_sgf_game.value.groups,
-            currentNodeBranch: 0
-        })
-    });
-
     /**
-     * Ошибки возникшие в процессе чтения
+     * Объект с игрой (для чтения SGF)
+     */
+    const parse_sgf_game = ref({});
+    /**
+     * Ошибки возникшие в процессе чтения SGF
      */
     const parse_sgf_errors = ref([]);
-
+    /**
+     * Текущая нода из дерева ходов (для чтения SGF)
+     */
+    const parse_sgf_currentNode = ref([]);
+    /**
+     * index текущей ветки ноды (для чтения SGF)
+     */
+    const parse_sgf_currentNodeBranch = ref(null);
+    /**
+     * кэш game для ходов (для чтения SGF)
+     */
+    const parse_sgf_movesCache = ref({});
+    /**
+     * Узлы текущего хода (для чтения SGF)
+     */
+    const parse_sgf_currentNodes = ref([]);
     /**
      * Парсим SGF
      * @param {String} sgf строка
      * @return {Void}
      */
-    function parseSGF(sgf){
-        let currentSymb = '';
-        let prevSymbol     = '';    //предыдущий символ
+    function parseSGF(sgf)
+    {
+        createNewGame({}, parse_sgf_game, parse_sgf_movesCache, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_currentNodes);
+
+        const commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+        
         let squareBrackets = false; //строка в квадратных скобках (могут быть любые символы, но их просто пишем в text)
         let command        = '';    //Начало записи команды (записываем command до '[', потом пишем текст в [] в text, и на ']' - выполняем команду с текстом.)
-        let commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+        let level = -1;
+        let parentMoves = [];
+        let squareInSquare = 0;
+        let sNum = 0;
+
+        parse_sgf_game.value = {
+            size: [19,19],
+            white_player_name: 'White',
+            white_player_rank: null,
+            black_player_name: 'Black',
+            black_player_rank: null,
+            game_date: null, //YYYY-MM-DD
+            game_result: null, //B+Resign
+            main_time: null, //Основное время в секундах
+            overtime: null, //Контроль времени
+            rules: 'Japanese', //Правила
+            visible_vertices: [], //Видимая часть доски, пустой массив = вся доска
+            movestree: [], //Дерево ходов
+            ko: {coords:[], moveNum:null}, // ko
+            prisoners: [0,0], //счетчик пленников [черных, белых]
+            currentMode: 'black', //текущий режим (black, white, буквы, цифры)
+            currentMove: {}, //текущий ход
+            moveNumber: 0, //номер текущего хода
+            groups: [], //Камни на доске (массив, содержащищий массивы - группы камней)
+        };
+        parse_sgf_errors.value = [];
+        parse_sgf_currentNode.value = parse_sgf_game.value.movestree;
+        parse_sgf_currentNodeBranch.value = null;
+        parse_sgf_movesCache.value = {
+            null: JSON.stringify({ //"нулевой" ход
+                ko: {coords:[], moveNum:null},
+                nodes:[],
+                prisoners: [0,0],
+                currentMode: 'black', 
+                currentMove: {},
+                moveNumber: 0, 
+                groups: parse_sgf_game.value.groups,
+                currentNodeBranch: null,
+                comment:'',
+            })
+        };
+        parse_sgf_currentNodes.value = [];
         
-        for (let i = 0; i < sgf.length; i++) 
+        for (let currentSymb of sgf)
         {
-            currentSymb = sgf.charAt(i);
             if (commandSymbs.includes(currentSymb) && squareBrackets===false) //команда
             {
                 command+=currentSymb; 
-                continue;
             }
-            else if (currentSymb=='[' && squareBrackets===false) //начался текст команды
-            {
-                squareBrackets = ''; 
-                continue;
+            else if (currentSymb=='(' && squareBrackets===false){
+                //новая ветка 
+                level++;
+                parentMoves.push(parse_sgf_game.value.currentMove.id??null);
             }
-            else if (currentSymb==']' && prevSymbol!='\\' && squareBrackets!==false) //закончился текст команды
+            else if (currentSymb==')' && squareBrackets===false){
+                //конец новой ветки
+                level--;
+                let moveToId = null;
+                if (level>0) moveToId = parentMoves.pop();
+
+                moveTo(moveToId, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes);
+            }
+            else if (currentSymb=='[') //начался текст команды
             {
-                commandSGF(command, squareBrackets);
-                squareBrackets = false;
-                if (sgf.charAt(i+1)!='[') command = '';
-                continue;
+                squareInSquare++;
+                if (squareBrackets===false) squareBrackets = '';
+                else squareBrackets+=currentSymb;
+            }
+            else if (currentSymb==']' && squareBrackets!==false) //закончился текст команды
+            {
+                squareInSquare--;
+                if (squareInSquare>0) squareBrackets+=currentSymb;
+                else{
+                    commandSGF(command, squareBrackets);
+                    squareBrackets = false;
+                    if (sgf.charAt(sNum+1)!='[') command = '';
+                }
             }
             else if (squareBrackets!==false){ //Идет текст команды в []
                 squareBrackets+=currentSymb;
-                continue;
             }
 
-            if (!currentSymb) prevSymbol = currentSymb;
+            sNum++;
         }
 
-        if(parse_sgf_errors.value.length>0) console.log(parse_sgf_errors.value);
-        else game.value = parse_sgf_game.value;
+        if(parse_sgf_errors.value.length == 0) {
+            game.value = parse_sgf_game.value;
+            currentNode.value = parse_sgf_currentNode.value;
+            currentNodeBranch.value = parse_sgf_currentNodeBranch.value;
+            movesCache.value = parse_sgf_movesCache.value;
+        }
+
+        return parse_sgf_errors.value
     }
 
     /**
@@ -469,9 +539,21 @@ export default function () {
      */
     function commandSGF(command, text)
     {
-        if (command=='B') {}
-        else if (command=='W') {}
-        else if (command=='C') {}
+        if (command=='B' || command=='W') { //TODO ход "пас"
+            parse_sgf_game.value.currentMode = (command == 'B' ? 'black' : 'white');
+            let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
+            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes);
+        }
+        else if (command=='C') //Комментарий к ходу
+        {
+            if(!parse_sgf_game.value.currentMove.id) parse_sgf_game.value.comment = text;
+            else parse_sgf_game.value.currentMove.comment = text;
+
+            let moveInfo = JSON.parse(parse_sgf_movesCache.value[parse_sgf_game.value.currentMove.id??null]);
+            parse_sgf_game.value.currentMove.comment = text;
+            moveInfo.comment = text;
+            parse_sgf_movesCache.value[parse_sgf_game.value.currentMove.id??null] = JSON.stringify(moveInfo);
+        }
         // else if (command=='AP') {} // Приложение, в котором создан SGF файл
         else if (command=='SZ') // Размер доски
         {
@@ -538,7 +620,7 @@ export default function () {
             parse_sgf_game.value.currentMode = 'blackStone';
 
             let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
-            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
+            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes);
             parse_sgf_game.value.currentMode = cacheMode;
         }
         else if (command=='AW') {
@@ -546,7 +628,7 @@ export default function () {
             parse_sgf_game.value.currentMode = 'whiteStone';
 
             let coords = [abc.findIndex((s)=>s==text.charAt(0))+1, abc.findIndex((s)=>s==text.charAt(1))+1];
-            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache);
+            move(coords, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes);
             parse_sgf_game.value.currentMode = cacheMode;
         }
         else if (command=='N') {}
@@ -555,6 +637,6 @@ export default function () {
     };
 
     return {
-        game, gobanAction, moveTo, createNewGame, parseSGF
+        game, gobanAction, moveTo, createNewGame, parseSGF, currentNodes
     }
 }

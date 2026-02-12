@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
-  game: Object,
+  game: {type:Object, default:{
+    movestree:[],
+  }},
   width:{type:Number, default:550}, //ширина контейнера с SVG
   height:{type:Number, default:250}, //высота контейнера с SVG
 });
@@ -127,12 +129,10 @@ const branchLineColor = function(index){
  * Рекурсивная функция чтения узла и выделения веток из movestree в одномерный массив
  * 
  * @param node узел для чтения
- * @param nodes передаваемые в рекурсию узлы
- * @param addNode добавить узел в рекурсии
  * @param parentIndent отступ от родительской ветки в рекурсии
  * @return [array] массив с извлеченными ветками
  */
-const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
+const readBranch = function(node, parentIndent=0)
 {
     let branches = [];
     //Если передан родительский узел - добавляем его в узлы
@@ -156,10 +156,8 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
             let newMove = {
                 number:branch[i].number+1, 
                 color:branch[i].color, 
-                nodes:nodes.slice(0), 
                 id:branch[i].id
             };
-            if (addNodeNum!==null) newMove.nodes.push({number:addNodeNum, branch:branchIndex});
 
             if (newMove.id!==null) currentBranch.moves.unshift(newMove);
 
@@ -167,8 +165,7 @@ const readBranch = function(node, nodes=[], addNodeNum=null, parentIndent=0)
             {
                 branchIndent.value++; //поднимаем отступ
                 //читаем узел с дочерними ветками
-                if (addNodeNum!==null) nodes.push({number:addNodeNum, branch:branchIndex});
-                childBranches.push(...readBranch(branch[i].children, nodes.slice(0), branch[i].number, currentBranch.indent));
+                childBranches.push(...readBranch(branch[i].children, currentBranch.indent));
             }
         }
         if (currentBranch.moves.length>0) branches.push(currentBranch, ...childBranches);
@@ -255,9 +252,9 @@ const calculateIndent = () => {
  * @param number номер хода
  * @param mid ID хода
  */
-const clickMove = (nodes, number, mid) => {
+const clickMove = (mid) => {
     if (props.game.currentMove.id && props.game.currentMove.id==mid) return;
-    emit('moveTo', {nodes:nodes, number:number, id:mid});
+    emit('moveTo', mid);
     calculateIndent();
 };
 
@@ -303,11 +300,12 @@ const handleMouseClickLeft = ()=>{
     cursorCoords.value.fixIndentY=null;
 }
 
-const currentMoveId = computed(()=>{
-    return props.game.currentMove.id;
+const watcherCondition = computed(()=>{
+    if (!props.game.movestree || !props.game.currentMove) return null;
+    return `${JSON.stringify(props.game.movestree).length}-${props.game.currentMove.number}`;
 });
 
-watch(currentMoveId, ()=>{
+watch(watcherCondition, ()=>{
     branches.value = readBranch(props.game.movestree);
     calcNavigationPoints();
     calculateIndent();
@@ -334,7 +332,7 @@ watch(currentMoveId, ()=>{
                     stroke-width="1"
                     fill="none">
                 </path>
-                <g class="move" @click="clickMove(move.nodes, move.number-1, move.id)" v-for="(move, mi) in branch.moves" :key="mi">
+                <g class="move" @click="clickMove(move.id)" v-for="(move, mi) in branch.moves" :key="mi">
                     <path v-if="mi>0" 
                         :d="`M${(elSize+5)*mi-7} ${elSize/2+(elSize+5)*bi} H ${(elSize+5)*mi+(elSize/2-2.5)}`" 
                         :stroke="branchLineColor(bi)" 
