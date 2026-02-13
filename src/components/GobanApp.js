@@ -148,7 +148,7 @@ export default function () {
      */
     function move(coords = [], gameObject = game, targetCurrentNode = currentNode, targetCurrentNodeBranch = currentNodeBranch, targetMovesCache = movesCache, targetNodes = currentNodes)
     {
-        const start = performance.now();
+        // const start = performance.now();
         /**
          * Доступные режимы для постановки камня
          */
@@ -399,7 +399,7 @@ export default function () {
             targetMovesCache.value[gameObject.value.currentMove.id??null] = JSON.stringify(cache);
         }
 
-        console.log(`move(): ${performance.now() - start} мс`);
+        // console.log(`move(): ${performance.now() - start} мс`);
     }
 
     /**
@@ -637,6 +637,25 @@ export default function () {
         else if (command=='N') {}
         // else if (command=='FF') {} //Версия файла
         else if (command=='GM' && text!=='1') parse_sgf_errors.value.push('Запись не относится к игре "Го"');
+        else if (command=='RE' && text!='') //Результат игры
+        {
+            let res = text.split('+');
+            let score = '', winner='';
+
+            if(res[0]=="B") winner='black';
+            else if (res[0]=="W") winner='white';
+            
+            if(res[1]){
+                // if(res[1]=='R' || res[1]=="Resign") score="Resign";
+                // else if (res[1]=="T" || res[1]=="Time") score="Time";
+            }
+            
+            parse_sgf_game.value.game_result={
+                winner:winner,
+                score:score,
+                text: text
+            };
+        }
     };
 
     return {
