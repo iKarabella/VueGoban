@@ -181,7 +181,8 @@ const readBranch = function(node, parentIndent=0)
  * @return void, результат записывается в movestreeHorizontalIndent и movestreeVerticalIndent
  */
 const calculateIndent = () => {
-
+    movestreeHorizontalIndent.value = 0;
+    movestreeVerticalIndent.value = 0;
     /**
      * Новые новые значения сдвига SVG от начала контейнера
      */
@@ -302,12 +303,13 @@ const handleMouseClickLeft = ()=>{
 }
 
 const watcherCondition = computed(()=>{
-    if (!props.game.movestree || !props.game.currentMove) return null;
+    if (!props.game.movestree) return null;
     return `${JSON.stringify(props.game.movestree).length}-${props.game.currentMove.number}`;
 });
 
 watch(watcherCondition, ()=>{
     branches.value = readBranch(props.game.movestree);
+
     calcNavigationPoints();
     calculateIndent();
 });

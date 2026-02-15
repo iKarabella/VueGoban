@@ -9,9 +9,10 @@ const props = defineProps({
     width:{type:Number, default:550}, //ширина контейнера с комментариями
     height:{type:Number, default:250}, //высота контейнера с комментариями
     currentNodes: {type:Array, default:[]}, //ноды текущего хода
+    author: {type:String, default:null} //автор комментария
 });
 
-const container_style = `width: ${props.width}px; height: ${props.height}px; overflow: auto; border: 1px solid #ccc; background-color:#c0c0c0; position:relative; border-radius: 7px;`;
+const container_style = `width: ${props.width}px; height: ${props.height}px; display: flex; flex-direction: column;overflow: auto; border: 1px solid #ccc; background-color:#c0c0c0; position:relative; border-radius: 7px;`;
 
 const emit = defineEmits(['newComment']);
 // emit('newComment', {num:0, comment:''});
@@ -19,9 +20,9 @@ const emit = defineEmits(['newComment']);
 const comments = ref([]);
 
 const watcherCondition = computed(()=>{
-    if (!props.game.movestree || !props.game.currentMove) return null;
-    if (props.onlyCurrent) return `${JSON.stringify(props.game.movestree).length}-${props.game.currentMove.number}`
-    else return JSON.stringify(props.game.movestree).length;
+    if (!props.game.movestree) return null;
+    if (props.onlyCurrent) return `${JSON.stringify(props.game.movestree).length}-${props.game.currentMove.number}-${props.game.comment}`
+    else return `${JSON.stringify(props.game.movestree).length}-${props.game.comment}`;
 });
 
 watch(watcherCondition, ()=>{
@@ -34,8 +35,8 @@ const currentNodeBranch = ref(null);
 const readComments = ()=>
 {
     if(props.onlyCurrent){
-        if (!props.game.currentMove.id) comments.value=[{move:'0', text:props.game.comment}];
-        else if (props.game.currentMove.comment) comments.value=[{move:props.game.currentMove.number+1, text:props.game.currentMove.comment}];
+        if (!props.game.currentMove.id && props.game.comment) comments.value=[{move:'0', text:props.game.comment.replace(/\n/g, "<br>")}];
+        else if (props.game.currentMove.comment) comments.value=[{move:props.game.currentMove.number+1, text:props.game.currentMove.comment.replace(/\n/g, "<br>")}];
         else comments.value=[];
         return;
     }
@@ -43,7 +44,7 @@ const readComments = ()=>
     if(!props.game.movestree) return;
 
     let tempComments = [];
-    if (props.game.comment && props.game.comment.length) tempComments.push({move:'0', text:props.game.comment});
+    if (props.game.comment && props.game.comment.length>0) tempComments.push({move:'0', text:props.game.comment.replace(/\n/g, "<br>")});
 
     currentNode.value = props.game.movestree;
 
@@ -67,11 +68,22 @@ const readComments = ()=>
         else lastMove = props.game.currentMove.number;
 
         currentNode.value[currentNodeBranch.value].forEach((move)=>{
-            if(move.number<=lastMove && move.comment && move.comment.length) tempComments.push({move:move.number+1, text:move.comment.replace(/\n/g, "<br>")});
+            if(move.number<=lastMove && move.comment && move.comment.length>0) tempComments.push({move:move.number+1, text:move.comment.replace(/\n/g, "<br>")});
         });
     });
 
     comments.value = tempComments;
+}
+
+const newComment = ref('');
+
+const sendComment = ()=>{
+    if(newComment.value.length<1) return;
+
+    let author = !props.author?'':`${props.author}: `;
+    
+    emit('newComment', author+newComment.value);
+    newComment.value='';
 }
 
 </script>
@@ -83,8 +95,11 @@ const readComments = ()=>
                 <div v-html="comment.text"/>
             </div>
         </div>
-        <div v-if="!readonly">
-            input string
+        <div v-if="!readonly" class="mt-auto border-t-1 border-gray-500 flex">
+            <input type="text" class="w-full" name="comment" @keyup.enter="sendComment" v-model="newComment" autocomplete="false"/>
+            <SecondaryButton class="ml-auto" @click="sendComment" title="Добавить комментарий">
+                >>
+            </SecondaryButton>
         </div>
     </div>
 </template>

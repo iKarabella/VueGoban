@@ -18,6 +18,33 @@ const whitePrisoners = computed(()=>{
     if (!props.game.prisoners || !props.game.prisoners.length) return 0;
     return props.game.prisoners[1];
 });
+const game_result = computed(()=>{
+    let winner = '', score='';
+
+    if(!props.game.game_result || !props.game.game_result.winner) return null;
+
+    if(props.game.game_result.winner=='Draw') winner="Ничья";
+    else if(props.game.game_result.winner=='black') winner = "Черные выиграли";
+    else if (props.game.game_result.winner=='white') winner = 'Белые выиграли'
+    
+    if (props.game.game_result.score=='Resign') score=' по сдаче';
+    else if (props.game.game_result.score=='Forfeit') score='';
+    else if (props.game.game_result.score=='Time') score=' по времени';
+    else {
+        let word = 'очков';
+        let num = parseFloat(props.game.game_result.score);
+
+        if(/[\.,]/.test(props.game.game_result.score)){
+            //TODO числительное если счет с 0,5
+        }
+        else {
+            //TODO числительное если счет целый
+        }
+        score = ` ${num} ${word}`
+    }
+    
+    return `${winner}${score}`
+});
 </script>
 <template>
     <div>
@@ -42,6 +69,9 @@ const whitePrisoners = computed(()=>{
                     <span>{{ whitePrisoners }} {{ whitePrisoners==1?'пленный':'пленных' }}</span>
                 </div>
             </div>
+        </div>
+        <div v-if="game_result!=null" class="text-gray-200 text-right">
+            {{ game_result }}
         </div>
     </div>
 </template>

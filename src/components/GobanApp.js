@@ -434,6 +434,8 @@ export default function () {
     function parseSGF(sgf)
     {
         createNewGame({}, parse_sgf_game, parse_sgf_movesCache, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_currentNodes);
+                
+        moveTo(null); //TODO если чтение SGF началось когда есть текущий ход и он не null - возникает ошибка. Может быть связано с TODO в move()
 
         const commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
         
@@ -531,7 +533,7 @@ export default function () {
             movesCache.value = parse_sgf_movesCache.value;
         }
 
-        return parse_sgf_errors.value
+        return parse_sgf_errors.value;
     }
 
     /**
@@ -639,26 +641,49 @@ export default function () {
         else if (command=='GM' && text!=='1') parse_sgf_errors.value.push('Запись не относится к игре "Го"');
         else if (command=='RE' && text!='') //Результат игры
         {
-            let res = text.split('+');
             let score = '', winner='';
 
-            if(res[0]=="B") winner='black';
-            else if (res[0]=="W") winner='white';
-            
-            if(res[1]){
-                // if(res[1]=='R' || res[1]=="Resign") score="Resign";
-                // else if (res[1]=="T" || res[1]=="Time") score="Time";
+            if(!text) return;
+            else if (text.startsWith("B+") || text.startsWith("W+")) {
+                let res = text.split('+');
+    
+                if(res[0]=="B") winner='black';
+                else if (res[0]=="W") winner='white';
+                
+                if(res[1]){
+                    if(res[1]=='R' || res[1]=="Resign") score="Resign";
+                    else if (res[1]=="T" || res[1]=="Time") score="Time";
+                    else if (res[1]=="F" || res[1]=='Forfeit') score="Forfeit"
+                    else score = res[1];
+                }
             }
+            else if(text=='0' || text=='Draw') winner = 'Draw';
             
-            parse_sgf_game.value.game_result={
+            parse_sgf_game.value.game_result = {
                 winner:winner,
                 score:score,
-                text: text
+                text:text
             };
         }
     };
 
+    function addComment(comment, targetGame = game, targetMovesCache = movesCache){
+        let move = null
+        if(!targetGame.value.currentMove.id) move = targetGame.value;
+        else move = targetGame.value.currentMove;
+
+        let lbreak = move.comment.length>0 ? "\n" : '';
+
+        move.comment+=lbreak+comment;
+
+        if(!targetGame.value.currentMove.id){
+            let cache = JSON.parse(targetMovesCache.value[null]);
+            cache.comment = move.comment;
+            targetMovesCache.value[null] = JSON.stringify(cache);
+        }
+    }
+
     return {
-        game, gobanAction, moveTo, createNewGame, parseSGF, currentNodes
+        game, gobanAction, moveTo, createNewGame, parseSGF, currentNodes, addComment
     }
 }
