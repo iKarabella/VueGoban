@@ -10,7 +10,7 @@ import GameInfo from './components/GameInfo';
 import Modal from './UI/Modal.vue';
 import SecondaryButton from './UI/SecondaryButton.vue';
 
-const { game, parseSGF, gobanAction, moveTo, createNewGame, currentNodes} = GobanApp();
+const { game, parseSGF, gobanAction, moveTo, createNewGame, currentNodes, addComment} = GobanApp();
 
 /**
  * Размеры экрана в пикселях
@@ -90,7 +90,7 @@ onUnmounted(() => {
             <div class="flex flex-col gap-2" :style="`width:${leftColumnWidth}px;`">
                 <GameInfo :game="game"/>
                 <MovesTree :width="leftColumnWidth" :game="game" @moveTo="moveTo" @navigationPoints="updateNavigationPoints"/>
-                <Comments :game="game" :readonly="false" :width="leftColumnWidth" :currentNodes="currentNodes"/>
+                <Comments :game="game" :readonly="false" :width="leftColumnWidth" :currentNodes="currentNodes" @newComment="addComment"/>
                 <div class="flex flex-wrap gap-2">
                     <SecondaryButton @click="createNewGameModal=true">Новая</SecondaryButton>
                     <SecondaryButton>Сохранить SGF</SecondaryButton>
