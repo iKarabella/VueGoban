@@ -1,20 +1,57 @@
 {
   "name": "vue-goban",
-  "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
+  "description": "Vue 3 components for Go board UI",
   "type": "module",
+  "main": "./dist/vue-goban.umd.cjs",
+  "module": "./dist/vue-goban.js",
+  "exports": {
+    ".": {
+      "import": "./dist/vue-goban.js",
+      "require": "./dist/vue-goban.umd.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "vue",
+    "vue3",
+    "goban",
+    "go",
+    "board-game",
+    "components"
+  ],
+  "homepage": "https://github.com/iKarabella/VueGoban",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iKarabella/VueGoban.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iKarabella/VueGoban/issues"
+  },
+  "license": "MIT",
+  "author": "iKarabella",
+  "sideEffects": [
+    "*.css"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build"
   },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.1.18",
-    "tailwindcss": "^4.1.18",
-    "vue": "^3.5.21"
+  "peerDependencies": {
+    "vue": "^3.3.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.1",
-    "vite": "^7.1.7"
+    "@tailwindcss/vite": "^4.1.5",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "tailwindcss": "^4.1.5",
+    "vite": "^6.3.5",
+    "vue": "^3.5.13"
   }
 }
