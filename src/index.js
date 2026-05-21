@@ -6,6 +6,7 @@ import Goban from './components/Goban/Goban.vue'
 import MovesTree from './components/MovesTree/MovesTree.vue'
 import GobanApp from './components/GobanApp.js'
 
+
 export {
   Comments,
   CreateGame,
