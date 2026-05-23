@@ -437,14 +437,13 @@ export default function () {
                 
         moveTo(null); //TODO если чтение SGF началось когда есть текущий ход и он не null - возникает ошибка. Может быть связано с TODO в move()
 
-        const commandSymbs = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+        const isCommandChar = (c) => c >= 'A' && c <= 'Z';
         
         let squareBrackets = false; //строка в квадратных скобках (могут быть любые символы, но их просто пишем в text)
         let command        = '';    //Начало записи команды (записываем command до '[', потом пишем текст в [] в text, и на ']' - выполняем команду с текстом.)
         let level = -1;
         let parentMoves = [];
         let squareInSquare = 0;
-        let sNum = 0;
 
         parse_sgf_game.value = {
             size: [19,19],
@@ -484,46 +483,64 @@ export default function () {
         };
         parse_sgf_currentNodes.value = [];
         
-        for (let currentSymb of sgf)
-        {
-            if (commandSymbs.includes(currentSymb) && squareBrackets===false) //команда
-            {
-                command+=currentSymb; 
-            }
-            else if (currentSymb=='(' && squareBrackets===false){
-                //новая ветка 
-                level++;
-                parentMoves.push(parse_sgf_game.value.currentMove.id??null);
-            }
-            else if (currentSymb==')' && squareBrackets===false){
-                //конец новой ветки
-                level--;
-                let moveToId = null;
-                if (level>0) moveToId = parentMoves.pop();
+        let escaped = false; // флаг экранирования
 
-                moveTo(moveToId, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes);
-            }
-            else if (currentSymb=='[') //начался текст команды
-            {
-                squareInSquare++;
-                if (squareBrackets===false) squareBrackets = '';
-                else squareBrackets+=currentSymb;
-            }
-            else if (currentSymb==']' && squareBrackets!==false) //закончился текст команды
-            {
-                squareInSquare--;
-                if (squareInSquare>0) squareBrackets+=currentSymb;
-                else{
-                    commandSGF(command, squareBrackets);
-                    squareBrackets = false;
-                    if (sgf.charAt(sNum+1)!='[') command = '';
+        for (let i = 0; i < sgf.length; i++) {
+            const currentSymb = sgf[i];
+
+            // Обработка escape-символа внутри скобок
+            if (squareBrackets !== false) {
+                if (escaped) {
+                    if (currentSymb !== '\n' && currentSymb !== '\r') {
+                        squareBrackets += currentSymb;
+                    }
+                    escaped = false;
+                    continue;
+                }
+
+                if (currentSymb === '\\') {
+                    escaped = true;
+                    // Слеш в значение не добавляем (по спецификации SGF FF[4])
+                    continue;
                 }
             }
-            else if (squareBrackets!==false){ //Идет текст команды в []
-                squareBrackets+=currentSymb;
-            }
 
-            sNum++;
+            if (currentSymb === '[') {
+                squareInSquare++;
+                if (squareBrackets === false) squareBrackets = '';
+                else squareBrackets += currentSymb;
+            }
+            else if (currentSymb === ']' && squareBrackets !== false) {
+                squareInSquare--;
+                if (squareInSquare > 0) squareBrackets += currentSymb;
+                else {
+                    try {
+                        commandSGF(command, squareBrackets);
+                        squareBrackets = false;
+                        escaped = false; // сбрасываем на всякий случай
+                        if (sgf[i + 1] !== '[') command = '';
+                    } catch (e) {
+                        parse_sgf_errors.value.push(e.message);
+                        break;
+                    }
+                }
+            }
+            else if (isCommandChar(currentSymb) && squareBrackets === false) {
+                command += currentSymb;
+            }
+            else if (currentSymb === '(' && squareBrackets === false) {
+                level++;
+                parentMoves.push(parse_sgf_game.value.currentMove.id ?? null);
+            }
+            else if (currentSymb === ')' && squareBrackets === false) {
+                level--;
+                let moveToId = null;
+                if (level > 0) moveToId = parentMoves.pop();
+                moveTo(moveToId, parse_sgf_game, parse_sgf_currentNode, parse_sgf_currentNodeBranch, parse_sgf_movesCache, parse_sgf_currentNodes)
+            }
+            else if (squareBrackets !== false) {
+                squareBrackets += currentSymb;
+            }
         }
 
         if(parse_sgf_errors.value.length == 0) {
@@ -683,7 +700,270 @@ export default function () {
         }
     }
 
+    /**
+     * Генерация SGF строки на основе данных игры
+     * @param {Object} targetGame объект с данными об игре (по умолчанию - текущая игра)
+     * @returns {String} SGF строка
+     */
+    function generateSGF(targetGame = game) {
+        const g = targetGame.value;
+        
+        /**
+         * Экранирование спецсимволов для SGF значений
+         */
+        function escapeSGF(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/]/g, '\\]');
+        }
+
+        /**
+         * Координаты [x, y] -> SGF буквы (например [1,1] -> "aa")
+         */
+        function coordsToSGF(coords) {
+            if (!coords || coords.length < 2) return '';
+            return abc[coords[0] - 1] + abc[coords[1] - 1];
+        }
+
+        /**
+         * Рекурсивный обход дерева ходов
+         * @param {Array} branch - массив ходов текущей ветки
+         * @returns {String}
+         */
+        function traverseTree(branch) {
+            if (!branch || branch.length === 0) return '';
+        
+            let result = '';
+        
+            for (let i = 0; i < branch.length; i++) {
+                const move = branch[i];
+        
+                // Записываем сам ход
+                if (move.color === 'black' || move.color === 'white') {
+                    const colorChar = move.color === 'black' ? 'B' : 'W';
+                    const vertex = move.coords && move.coords.length === 2
+                        ? coordsToSGF(move.coords)
+                        : '';
+                    result += `;${colorChar}[${vertex}]`;
+                }
+        
+                // Комментарий к ходу
+                if (move.comment && move.comment.length > 0) {
+                    result += `C[${escapeSGF(move.comment)}]`;
+                }
+        
+                // Метки
+                if (move.marks && move.marks.length > 0) {
+                    result += serializeMarks(move.marks);
+                }
+        
+                // Дочерние ветки — каждая оборачивается в скобки
+                if (move.children && move.children.length > 0) {
+                    // Оставшиеся ходы текущей ветки (после текущего хода) 
+                    // становятся первой дочерней веткой
+                    const restOfBranch = branch.slice(i + 1);
+        
+                    if (restOfBranch.length > 0) {
+                        // Есть продолжение текущей ветки — оно идёт первой веткой
+                        result += `(${traverseTree(restOfBranch)})`;
+                    }
+        
+                    // Затем все дочерние ветки
+                    for (let b = 0; b < move.children.length; b++) {
+                        result += `(${traverseTree(move.children[b])})`;
+                    }
+        
+                    // Прерываем цикл — оставшиеся ходы уже обработаны рекурсивно
+                    break;
+                }
+            }
+        
+            return result;
+        }
+
+        /**
+         * Сериализация меток хода (если используются)
+         * @param {Array} marks
+         * @returns {String}
+         */
+        function serializeMarks(marks) {
+            if (!marks || marks.length === 0) return '';
+
+            // Группируем метки по типу
+            const grouped = {};
+            marks.forEach(mark => {
+                if (!grouped[mark.type]) grouped[mark.type] = [];
+                grouped[mark.type].push(mark);
+            });
+
+            let result = '';
+            for (const type in grouped) {
+                const sgfType = markTypeToSGF(type);
+                if (!sgfType) continue;
+
+                grouped[type].forEach(mark => {
+                    if (mark.coords) {
+                        result += `${sgfType}[${coordsToSGF(mark.coords)}]`;
+                    }
+                });
+            }
+            return result;
+        }
+
+        /**
+         * Тип метки -> SGF команда
+         */
+        function markTypeToSGF(type) {
+            const map = {
+                'circle':    'CR',
+                'square':    'SQ',
+                'triangle':  'TR',
+                'cross':     'MA',
+                'label':     'LB',
+                'selected':  'SL',
+            };
+            return map[type] || null;
+        }
+
+        // ─── Заголовок SGF ───────────────────────────────────────────────
+
+        let sgf = '(;';
+
+        // Версия формата и тип игры
+        sgf += 'FF[4]';
+        sgf += 'GM[1]';
+
+        // Размер доски
+        if (g.size) {
+            if (g.size[0] === g.size[1]) {
+                sgf += `SZ[${g.size[0]}]`;
+            } else {
+                sgf += `SZ[${g.size[0]}:${g.size[1]}]`;
+            }
+        }
+
+        // Правила
+        if (g.rules) {
+            sgf += `RU[${escapeSGF(g.rules)}]`;
+        }
+
+        // Игроки
+        if (g.black_player_name && g.black_player_name !== 'Black') {
+            sgf += `PB[${escapeSGF(g.black_player_name)}]`;
+        }
+        if (g.black_player_rank) {
+            sgf += `BR[${escapeSGF(g.black_player_rank)}]`;
+        }
+        if (g.white_player_name && g.white_player_name !== 'White') {
+            sgf += `PW[${escapeSGF(g.white_player_name)}]`;
+        }
+        if (g.white_player_rank) {
+            sgf += `WR[${escapeSGF(g.white_player_rank)}]`;
+        }
+
+        // Дата
+        if (g.game_date) {
+            sgf += `DT[${escapeSGF(g.game_date)}]`;
+        }
+
+        // Результат
+        if (g.game_result) {
+            const re = g.game_result.text
+                ? g.game_result.text
+                : formatGameResult(g.game_result);
+            sgf += `RE[${escapeSGF(re)}]`;
+        }
+
+        // Основное время
+        if (g.main_time) {
+            sgf += `TM[${escapeSGF(g.main_time)}]`;
+        }
+
+        // Контроль времени (overtime)
+        if (g.overtime) {
+            sgf += `OT[${escapeSGF(g.overtime)}]`;
+        }
+
+        // Комментарий к нулевому ходу
+        if (g.comment && g.comment.length > 0) {
+            sgf += `C[${escapeSGF(g.comment)}]`;
+        }
+
+        // ─── Камни расстановки (AB / AW) ────────────────────────────────
+        // Ищем в первой ветке ходы типа blackStone/whiteStone
+        // Они не записываются как B[]/W[], а как AB[]/AW[]
+        // В нашем дереве они не хранятся отдельно — поэтому
+        // обходим groups и ищем камни без хода (если movestree пуст)
+        // Альтернатива: при parseSGF blackStone/whiteStone не создают
+        // записи в movestree, поэтому нужно смотреть на начальные группы.
+        // Здесь мы восстанавливаем их из кэша нулевого хода.
+        const zeroCache = movesCache.value[null]
+            ? JSON.parse(movesCache.value[null])
+            : null;
+
+        if (zeroCache && zeroCache.groups && zeroCache.groups.length > 0) {
+            const blackStones = [];
+            const whiteStones = [];
+
+            zeroCache.groups.forEach(group => {
+                group.stones.forEach(stone => {
+                    if (group.color === 'black') blackStones.push(stone);
+                    else whiteStones.push(stone);
+                });
+            });
+
+            if (blackStones.length > 0) {
+                sgf += 'AB';
+                blackStones.forEach(s => { sgf += `[${coordsToSGF(s)}]`; });
+            }
+            if (whiteStones.length > 0) {
+                sgf += 'AW';
+                whiteStones.forEach(s => { sgf += `[${coordsToSGF(s)}]`; });
+            }
+        }
+
+        // ─── Дерево ходов ────────────────────────────────────────────────
+        if (g.movestree && g.movestree.length > 0) {
+            if (g.movestree.length === 1) {
+                // Одна главная ветка — её содержимое идёт прямо в корневой узел
+                sgf += traverseTree(g.movestree[0]);
+            } else {
+                // Несколько веток на верхнем уровне
+                for (let b = 0; b < g.movestree.length; b++) {
+                    sgf += `(${traverseTree(g.movestree[b])})`;
+                }
+            }
+        }
+
+        sgf += ')';
+
+        return sgf;
+    }
+
+    /**
+     * Форматирование результата игры в SGF строку
+     * (используется если game_result.text не задан)
+     * @param {Object} result
+     * @returns {String}
+     */
+    function formatGameResult(result) {
+        if (!result) return '';
+        if (result.winner === 'Draw') return 'Draw';
+
+        const winnerChar = result.winner === 'black' ? 'B' : 'W';
+        if (!result.score) return `${winnerChar}+`;
+
+        const scoreMap = {
+            'Resign':  'R',
+            'Time':    'T',
+            'Forfeit': 'F',
+        };
+        const score = scoreMap[result.score] ?? result.score;
+        return `${winnerChar}+${score}`;
+    }
+
     return {
-        game, gobanAction, moveTo, createNewGame, parseSGF, currentNodes, addComment
+        game, gobanAction, moveTo, createNewGame, parseSGF, currentNodes, addComment, generateSGF
     }
 }

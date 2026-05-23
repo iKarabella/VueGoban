@@ -10,7 +10,7 @@ import GameInfo from './components/GameInfo';
 import Modal from './UI/Modal.vue';
 import SecondaryButton from './UI/SecondaryButton.vue';
 
-const { game, parseSGF, gobanAction, moveTo, createNewGame, currentNodes, addComment} = GobanApp();
+const { game, parseSGF, gobanAction, moveTo, createNewGame, currentNodes, addComment, generateSGF} = GobanApp();
 
 /**
  * Размеры экрана в пикселях
@@ -70,6 +70,10 @@ const handleGlobalKeydown = (event) => {
     }
 };
 
+const saveGameToSGF = ()=>{
+    console.log(generateSGF(game));
+}
+
 onMounted(() => {
     document.addEventListener('keydown', handleGlobalKeydown);
     createNewGame();
@@ -93,7 +97,7 @@ onUnmounted(() => {
                 <Comments :game="game" :readonly="false" :width="leftColumnWidth" :currentNodes="currentNodes" @newComment="addComment"/>
                 <div class="flex flex-wrap gap-2">
                     <SecondaryButton @click="createNewGameModal=true">Новая</SecondaryButton>
-                    <SecondaryButton>Сохранить SGF</SecondaryButton>
+                    <SecondaryButton @click="saveGameToSGF()">Сохранить SGF</SecondaryButton>
                 </div>
             </div>
         </div>

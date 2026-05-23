@@ -1,6 +1,6 @@
 {
   "name": "vue-goban",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "description": "Vue 3 components for Go board UI",
   "type": "module",
   "main": "./dist/vue-goban.umd.cjs",
