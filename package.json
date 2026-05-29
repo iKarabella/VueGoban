@@ -1,9 +1,9 @@
 {
-  "name": "vue-goban",
-  "version": "2.0.0",
+  "name": "@karabella/vue-goban",
+  "version": "2.0.2",
   "description": "Vue 3 Go board components with game engine",
   "keywords": [
-    "go", "baduk", "weiqi", "board-game", "vue", "vue3", "sgf"
+    "go", "baduk", "weiqi", "board-game", "vue", "vue3", "sgf", "goban"
   ],
   "author": "Karabella <zlaya@younan.ru>",
   "license": "MIT",
@@ -20,8 +20,7 @@
     ".": {
       "import": "./dist/vue-goban.es.js",
       "require": "./dist/vue-goban.umd.cjs"
-    },
-    "./styles": "./dist/style.css"
+    }
   },
   "types": "./dist/index.d.ts",
 

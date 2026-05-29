@@ -2,6 +2,8 @@
 
 Vue 3 компоненты для игры Го.
 
+Пакет находится в стадии разработки, возможны сильные изменения.
+
 ## Установка
 
 ```bash
@@ -17,7 +19,6 @@ npm install @karabella/vue-goban
 import { createApp }    from 'vue';
 import App              from './App.vue';
 import GobanPlugin    from '@karabella/vue-goban';
-import '@karabella/vue-goban/styles';
 
 createApp(App)
   .use(GobanPlugin)
@@ -46,7 +47,6 @@ import {
   Comments,
   useGoGame,
 } from '@karabella/vue-goban';
-import '@karabella/vue-goban/styles';
 </script>
 
 <template>
