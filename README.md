@@ -1,6 +1,117 @@
-# Vue 3 + Vite
+# @karabella/vue-goban
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 компоненты для игры Го.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
-# VueGoban
+## Установка
+
+```bash
+npm install @karabella/vue-goban
+```
+
+## Использование
+
+### Плагин (глобальная регистрация)
+
+```javascript
+// main.js
+import { createApp }    from 'vue';
+import App              from './App.vue';
+import GobanPlugin    from '@karabella/vue-goban';
+import '@karabella/vue-goban/styles';
+
+createApp(App)
+  .use(GobanPlugin)
+  .mount('#app');
+```
+
+```vue
+<template>
+  <Goban />
+  <GoGameInfo />
+  <GoMovesTree />
+  <GoControlPanel />
+  <GoComments />
+</template>
+```
+
+### Локальная регистрация
+
+```vue
+<script setup>
+import {
+  Goban,
+  GameInfo,
+  MovesTree,
+  ControlPanel,
+  Comments,
+  useGoGame,
+} from '@karabella/vue-goban';
+import '@karabella/vue-goban/styles';
+</script>
+
+<template>
+  <div class="app">
+    <Goban />
+    <GameInfo />
+    <MovesTree />
+    <ControlPanel />
+    <Comments />
+  </div>
+</template>
+```
+
+### Только ядро (без компонентов)
+
+```javascript
+import { useGoGame, GoEngine, SGFParser } from '@karabella/vue-goban';
+
+const { state, placeStone, pass, undo } = useGoGame();
+```
+
+### Пользовательский компонент с ядром
+
+```vue
+<script setup>
+import { useGoGame } from '@karabella/vue-goban';
+
+const { state, placeStone, currentColorName } = useGoGame();
+</script>
+
+<template>
+  <div>Ход: {{ currentColorName }}</div>
+  <div>Ходов сыграно: {{ state.currentNode.moveNumber }}</div>
+</template>
+```
+
+## API
+
+### `useGoGame()`
+
+| Свойство / Метод    | Тип                        | Описание                    |
+|---------------------|----------------------------|-----------------------------|
+| `state`             | `GameState`                | Реактивное состояние игры   |
+| `placeStone(x, y)`  | `(number, number) → bool`  | Поставить камень            |
+| `pass()`            | `() → void`                | Пас                         |
+| `undo()`            | `() → bool`                | Отменить ход                |
+| `goToNode(node)`    | `(MoveNode) → void`        | Перейти к узлу дерева       |
+| `loadSGF(string)`   | `(string) → bool`          | Загрузить SGF               |
+| `exportSGF()`       | `() → string`              | Экспортировать в SGF        |
+| `newGame(options)`  | `(options?) → void`        | Новая игра                  |
+
+### Компоненты
+
+| Компонент      | Описание                              |
+|----------------|---------------------------------------|
+| `Goban`      | Игровая доска (canvas)                |
+| `GameInfo`     | Информация об игре и игроках          |
+| `MovesTree`     | Дерево ходов (canvas, drag & drop)    |
+| `ControlPanel` | Панель управления                     |
+| `Comments` | Комментарии к ходам                   |
+
+## Опции плагина
+
+```javascript
+app.use(GobanPlugin, {
+  prefix: 'Go',  // Goban, GoGameInfo, GoMovesTree, ...
+})
+```
