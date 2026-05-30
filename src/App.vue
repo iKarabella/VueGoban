@@ -4,7 +4,7 @@ import Goban       from './components/Goban.vue';
 import GameInfo      from './components/GameInfo.vue';
 import MovesTree      from './components/MovesTree.vue';
 import ControlPanel  from './components/ControlPanel.vue';
-import Comments  from './components/Comments.vue';
+import EditComments  from './components/EditComments.vue';
 
 const {
   state,
@@ -101,7 +101,7 @@ const {
       <aside class="app__sidebar app__sidebar--right">
         <GameInfo />
         <MovesTree />
-        <Comments />
+        <EditComments />
         <ControlPanel />
       </aside>
     </main>

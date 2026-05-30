@@ -4,35 +4,52 @@
 
     <!-- Текущий ход -->
     <div v-if="currentNode && currentNode.moveNumber > 0" class="move-badge" :class="currentNode.colorName">
-        <div class="move-badge__stone" />
-        <span>Ход {{ currentNode.moveNumber }}</span>
-        <span class="move-badge__coords">
-            {{ currentNode.coords ? formatCoords(currentNode.coords) : 'ПАС' }}
-        </span>
+      <div class="move-badge__stone" />
+      <span>Ход {{ currentNode.moveNumber }}</span>
+      <span class="move-badge__coords">
+        {{ currentNode.coords ? formatCoords(currentNode.coords) : 'ПАС' }}
+      </span>
     </div>
     <div v-else class="move-comments__empty-move">
-        Начало партии
+      Начало партии
     </div>
 
+    <!-- Редактор -->
     <div class="move-comments__editor">
-        {{ localComment }}
+      <label class="move-comments__label">Комментарий к ходу:</label>
+      <textarea
+        v-model="localComment"
+        class="move-comments__textarea"
+        placeholder="Добавьте комментарий к этому ходу..."
+        :disabled="!currentNode || currentNode.moveNumber === 0"
+        @input="handleCommentChange"
+        rows="4"
+      />
+      <div class="move-comments__char-count">{{ localComment.length }} символов</div>
     </div>
 
     <!-- Все комментарии -->
     <div class="move-comments__all">
-        <h3 class="move-comments__subtitle">Все комментарии</h3>
-        <div v-if="allComments.length === 0" class="move-comments__no-comments">
-            Нет комментариев
+      <h3 class="move-comments__subtitle">Все комментарии</h3>
+      <div v-if="allComments.length === 0" class="move-comments__no-comments">
+        Нет комментариев
+      </div>
+      <div
+        v-for="item in allComments"
+        :key="item.node.id"
+        class="comment-item"
+        :class="{ 'comment-item--active': item.node === state.currentNode }"
+        @click="goToNode(item.node)"
+      >
+        <div class="comment-item__header">
+          <div class="comment-item__stone" :class="item.node.colorName" />
+          <span class="comment-item__move">Ход {{ item.node.moveNumber }}</span>
+          <span class="comment-item__coords">
+            {{ item.node.coords ? formatCoords(item.node.coords) : 'ПАС' }}
+          </span>
         </div>
-        <div
-            v-for="item in allComments"
-            :key="item.node.id"
-            class="comment-item"
-            :class="{ 'comment-item--active': item.node === state.currentNode }"
-            @click="goToNode(item.node)"
-        >
-            <p class="comment-item__text">Ход {{ item.node.moveNumber }}: {{ item.node.comment }}</p>
-        </div>
+        <p class="comment-item__text">{{ item.node.comment }}</p>
+      </div>
     </div>
   </div>
 </template>

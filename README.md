@@ -19,6 +19,7 @@ npm install @karabella/vue-goban
 import { createApp }    from 'vue';
 import App              from './App.vue';
 import GobanPlugin    from '@karabella/vue-goban';
+import '@karabella/vue-goban/styles';
 
 createApp(App)
   .use(GobanPlugin)
@@ -47,6 +48,7 @@ import {
   Comments,
   useGoGame,
 } from '@karabella/vue-goban';
+import '@karabella/vue-goban/styles';
 </script>
 
 <template>

@@ -4,6 +4,7 @@ export { default as GameInfo }      from './components/GameInfo.vue';
 export { default as MovesTree }     from './components/MovesTree.vue';
 export { default as ControlPanel }  from './components/ControlPanel.vue';
 export { default as Comments }      from './components/Comments.vue';
+export { default as EditComments }      from './components/EditComments.vue';
 
 // Ядро
 export { useGoGame }   from './core/useGoGame.js';
@@ -16,6 +17,7 @@ import GameInfo     from './components/GameInfo.vue';
 import MovesTree     from './components/MovesTree.vue';
 import ControlPanel from './components/ControlPanel.vue';
 import Comments from './components/Comments.vue';
+import EditComments from './components/EditComments.vue';
 
 const components = {
   Goban,
@@ -23,6 +25,7 @@ const components = {
   MovesTree,
   ControlPanel,
   Comments,
+  EditComments,
 };
 
 export const GobanPlugin = {

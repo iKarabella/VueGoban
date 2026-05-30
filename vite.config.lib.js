@@ -21,7 +21,9 @@ export default defineConfig({
         globals: {
           vue: 'Vue',
         },
+        // CSS в отдельный файл
         assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'style.css') return 'style.css';
           return assetInfo.name;
         },
       },

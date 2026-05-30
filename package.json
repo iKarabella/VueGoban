@@ -20,7 +20,8 @@
     ".": {
       "import": "./dist/vue-goban.es.js",
       "require": "./dist/vue-goban.umd.cjs"
-    }
+    },
+    "./styles": "./dist/style.css"
   },
   "types": "./dist/index.d.ts",
 
