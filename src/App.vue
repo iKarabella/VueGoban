@@ -50,7 +50,7 @@ const {
 
     <main class="app__main">
       <section class="app__board-section">
-        <Goban />
+        <Goban :show_coordinates="false"/>
 
         <!-- Быстрые действия под доской -->
         <div class="app__quick-actions">

@@ -20,30 +20,30 @@ import Comments from './components/Comments.vue';
 import EditComments from './components/EditComments.vue';
 
 const components = {
-  Goban,
-  GameInfo,
-  MovesTree,
-  ControlPanel,
-  Comments,
-  EditComments,
+	Goban,
+	GameInfo,
+	MovesTree,
+	ControlPanel,
+	Comments,
+	EditComments,
 };
 
 export const GobanPlugin = {
-  install(app, options = {}) {
-    // Префикс для компонентов: по умолчанию 'Go'
-    // Goban, GoGameInfo, GoMovesTree, ...
-    const prefix = options.prefix ?? 'Go';
+	install(app, options = {}) {
+		// Префикс для компонентов: по умолчанию 'Go'
+		// Goban, GoGameInfo, GoMovesTree, ...
+		const prefix = options.prefix ?? 'Go';
 
-    Object.entries(components).forEach(([name, component]) => {
-      // Goban → Goban (префикс уже есть)
-      // GameInfo → GoGameInfo
-      const componentName = name.startsWith('Go')
-        ? `${prefix}${name.slice(2)}`   // Goban → Goban
-        : `${prefix}${name}`;           // GameInfo → GoGameInfo
+		Object.entries(components).forEach(([name, component]) => {
+		// Goban → Goban (префикс уже есть)
+		// GameInfo → GoGameInfo
+		const componentName = name.startsWith('Go')
+			? `${prefix}${name.slice(2)}`   // Goban → Goban
+			: `${prefix}${name}`;           // GameInfo → GoGameInfo
 
-      app.component(componentName, component);
-    });
-  },
+		app.component(componentName, component);
+		});
+	},
 };
 
 // Default export — плагин

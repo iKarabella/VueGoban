@@ -1,56 +1,56 @@
 {
-  "name": "@karabella/vue-goban",
-  "version": "2.0.3",
-  "description": "Vue 3 Go board components with game engine",
-  "keywords": [
-    "go", "baduk", "weiqi", "board-game", "vue", "vue3", "sgf", "goban"
-  ],
-  "author": "Karabella <zlaya@younan.ru>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/iKarabella/VueGoban.git"
-  },
+	"name": "@karabella/vue-goban",
+	"version": "2.0.4",
+	"description": "Vue 3 Go board components with game engine",
+	"keywords": [
+		"go", "baduk", "weiqi", "board-game", "vue", "vue3", "sgf", "goban"
+	],
+	"author": "Karabella <zlaya@younan.ru>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/iKarabella/VueGoban.git"
+	},
 
-  "type": "module",
+	"type": "module",
 
-  "main":    "./dist/vue-goban.umd.cjs",
-  "module":  "./dist/vue-goban.es.js",
-  "exports": {
-    ".": {
-      "import": "./dist/vue-goban.es.js",
-      "require": "./dist/vue-goban.umd.cjs"
-    },
-    "./styles": "./dist/vue-goban.css"
-  },
-  "types": "./dist/index.d.ts",
+	"main":    "./dist/vue-goban.umd.cjs",
+	"module":  "./dist/vue-goban.es.js",
+	"exports": {
+		".": {
+		"import": "./dist/vue-goban.es.js",
+		"require": "./dist/vue-goban.umd.cjs"
+		},
+		"./styles": "./dist/vue-goban.css"
+	},
+	"types": "./dist/index.d.ts",
 
-  "files": [
-    "dist",
-    "README.md"
-  ],
+	"files": [
+		"dist",
+		"README.md"
+	],
 
-  "scripts": {
-    "dev":        "vite",
-    "build":      "vue-tsc --noEmit && vite build",
-    "build:lib":  "vite build --config vite.config.lib.js",
-    "preview":    "vite preview",
-    "type-check": "vue-tsc --noEmit",
-    "prepublishOnly": "npm run build:lib"
-  },
+	"scripts": {
+		"dev":        "vite",
+		"build":      "vue-tsc --noEmit && vite build",
+		"build:lib":  "vite build --config vite.config.lib.js",
+		"preview":    "vite preview",
+		"type-check": "vue-tsc --noEmit",
+		"prepublishOnly": "npm run build:lib"
+	},
 
-  "peerDependencies": {
-    "vue": "^3.3.0"
-  },
-  "peerDependenciesMeta": {
-    "vue": { "optional": false }
-  },
+	"peerDependencies": {
+		"vue": "^3.3.0"
+	},
+	"peerDependenciesMeta": {
+		"vue": { "optional": false }
+	},
 
-  "devDependencies": {
-    "@vitejs/plugin-vue": "^5.0.0",
-    "vite":               "^5.0.0",
-    "vue":                "^3.3.0",
-    "vue-tsc":            "^2.0.0",
-    "typescript":         "^5.0.0"
-  }
+	"devDependencies": {
+		"@vitejs/plugin-vue": "^5.0.0",
+		"vite":               "^5.0.0",
+		"vue":                "^3.3.0",
+		"vue-tsc":            "^2.0.0",
+		"typescript":         "^5.0.0"
+	}
 }
