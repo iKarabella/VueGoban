@@ -1,6 +1,6 @@
 {
   "name": "@karabella/vue-goban",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Vue 3 Go board components with game engine",
   "keywords": [
     "go", "baduk", "weiqi", "board-game", "vue", "vue3", "sgf", "goban"
@@ -21,7 +21,7 @@
       "import": "./dist/vue-goban.es.js",
       "require": "./dist/vue-goban.umd.cjs"
     },
-    "./styles": "./dist/style.css"
+    "./styles": "./dist/vue-goban.css"
   },
   "types": "./dist/index.d.ts",
 

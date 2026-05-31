@@ -156,7 +156,7 @@ export declare class SGFParser {
 
 // ─── Компоненты ──────────────────────────────────────────────────
 
-export declare const GoBoard:       DefineComponent<{}, {}, any>;
+export declare const VueGoban:       DefineComponent<{}, {}, any>;
 export declare const GameInfo:      DefineComponent<{}, {}, any>;
 export declare const MoveTree:      DefineComponent<{}, {}, any>;
 export declare const ControlPanel:  DefineComponent<{}, {}, any>;
@@ -164,12 +164,12 @@ export declare const MoveComments:  DefineComponent<{}, {}, any>;
 
 // ─── Плагин ──────────────────────────────────────────────────────
 
-export interface GoBoardPluginOptions {
+export interface VueGobanPluginOptions {
   prefix?: string;
 }
 
-export declare const GoBoardPlugin: {
-  install(app: App, options?: GoBoardPluginOptions): void;
+export declare const VueGobanPlugin: {
+  install(app: App, options?: VueGobanPluginOptions): void;
 };
 
-export default GoBoardPlugin;
+export default VueGobanPlugin;

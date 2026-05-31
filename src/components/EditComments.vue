@@ -1,59 +1,3 @@
-<template>
-  <div class="move-comments">
-    <h2 class="move-comments__title">Комментарии</h2>
-
-    <!-- Текущий ход -->
-    <div v-if="currentNode && currentNode.moveNumber > 0" class="move-badge" :class="currentNode.colorName">
-      <div class="move-badge__stone" />
-      <span>Ход {{ currentNode.moveNumber }}</span>
-      <span class="move-badge__coords">
-        {{ currentNode.coords ? formatCoords(currentNode.coords) : 'ПАС' }}
-      </span>
-    </div>
-    <div v-else class="move-comments__empty-move">
-      Начало партии
-    </div>
-
-    <!-- Редактор -->
-    <div class="move-comments__editor">
-      <label class="move-comments__label">Комментарий к ходу:</label>
-      <textarea
-        v-model="localComment"
-        class="move-comments__textarea"
-        placeholder="Добавьте комментарий к этому ходу..."
-        :disabled="!currentNode || currentNode.moveNumber === 0"
-        @input="handleCommentChange"
-        rows="4"
-      />
-      <div class="move-comments__char-count">{{ localComment.length }} символов</div>
-    </div>
-
-    <!-- Все комментарии -->
-    <div class="move-comments__all">
-      <h3 class="move-comments__subtitle">Все комментарии</h3>
-      <div v-if="allComments.length === 0" class="move-comments__no-comments">
-        Нет комментариев
-      </div>
-      <div
-        v-for="item in allComments"
-        :key="item.node.id"
-        class="comment-item"
-        :class="{ 'comment-item--active': item.node === state.currentNode }"
-        @click="goToNode(item.node)"
-      >
-        <div class="comment-item__header">
-          <div class="comment-item__stone" :class="item.node.colorName" />
-          <span class="comment-item__move">Ход {{ item.node.moveNumber }}</span>
-          <span class="comment-item__coords">
-            {{ item.node.coords ? formatCoords(item.node.coords) : 'ПАС' }}
-          </span>
-        </div>
-        <p class="comment-item__text">{{ item.node.comment }}</p>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useGoGame } from '../core/useGoGame.js';
@@ -62,38 +6,98 @@ const { state, currentNode, currentComment, setComment, goToNode } = useGoGame()
 
 const LETTERS = 'ABCDEFGHJKLMNOPQRST';
 
+const props = defineProps({
+    showAllComments: {type:Boolean, default:true}
+})
+
 function formatCoords({ x, y }) {
-  return `${LETTERS[x]}${state.boardSize - y}`;
+    return `${LETTERS[x]}${state.boardSize - y}`;
 }
 
 const localComment = ref('');
 
 // Синхронизация при смене узла
 watch(
-  currentComment,
-  (val) => { localComment.value = val || ''; },
-  { immediate: true }
+    currentComment,
+    (val) => { localComment.value = val || ''; },
+    { immediate: true }
 );
 
 let saveTimer = null;
 function handleCommentChange() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => setComment(localComment.value), 500);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => setComment(localComment.value), 500);
 }
 
 /** Собрать все узлы с комментариями (обход всего дерева) */
 const allComments = computed(() => {
-  const result = [];
-  function dfs(node) {
-    if (node.comment?.trim() && node.moveNumber > 0) {
-      result.push({ node });
+    const result = [];
+    function dfs(node) {
+        if (node.comment?.trim() && node.moveNumber > 0) {
+        result.push({ node });
+        }
+        node.children.forEach(dfs);
     }
-    node.children.forEach(dfs);
-  }
-  dfs(state.rootNode);
-  return result;
+    dfs(state.rootNode);
+    return result;
 });
 </script>
+
+<template>
+    <div class="move-comments">
+        <h2 class="move-comments__title">Комментарии</h2>
+
+        <!-- Текущий ход -->
+        <div v-if="currentNode && currentNode.moveNumber > 0" class="move-badge" :class="currentNode.colorName">
+        <div class="move-badge__stone" />
+        <span>Ход {{ currentNode.moveNumber }}</span>
+        <span class="move-badge__coords">
+            {{ currentNode.coords ? formatCoords(currentNode.coords) : 'ПАС' }}
+        </span>
+        </div>
+        <div v-else class="move-comments__empty-move">
+        Начало партии
+        </div>
+
+        <!-- Редактор -->
+        <div class="move-comments__editor">
+        <label class="move-comments__label">Комментарий к ходу:</label>
+        <textarea
+            v-model="localComment"
+            class="move-comments__textarea"
+            placeholder="Добавьте комментарий к этому ходу..."
+            :disabled="!currentNode || currentNode.moveNumber === 0"
+            @input="handleCommentChange"
+            rows="4"
+        />
+        <div class="move-comments__char-count">{{ localComment.length }} символов</div>
+        </div>
+
+        <!-- Все комментарии -->
+        <div v-show="showAllComments" class="move-comments__all">
+            <h3 class="move-comments__subtitle">Все комментарии</h3>
+            <div v-if="allComments.length === 0" class="move-comments__no-comments">
+                Нет комментариев
+            </div>
+            <div
+                v-for="item in allComments"
+                :key="item.node.id"
+                class="comment-item"
+                :class="{ 'comment-item--active': item.node === state.currentNode }"
+                @click="goToNode(item.node)"
+            >
+                <div class="comment-item__header">
+                <div class="comment-item__stone" :class="item.node.colorName" />
+                <span class="comment-item__move">Ход {{ item.node.moveNumber }}</span>
+                <span class="comment-item__coords">
+                    {{ item.node.coords ? formatCoords(item.node.coords) : 'ПАС' }}
+                </span>
+                </div>
+                <p class="comment-item__text">{{ item.node.comment }}</p>
+            </div>
+        </div>
+    </div>
+</template>
 
 <style scoped>
 .move-comments {
