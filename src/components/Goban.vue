@@ -27,7 +27,13 @@ const props = defineProps({
 		type:    Boolean,
 		default: true,
 	},
+	prohibit_actions:{
+		type:	 Boolean,
+		default: false
+	}
 });
+
+const emits = defineEmits(['madeMove'])
 
 const {
 	state, handleBoardClick, setHoveredCell,
@@ -477,18 +483,24 @@ function getEventPos(event) {
 }
 
 function handleClick(event) {
+	if (props.prohibit_actions) return;
 	const { px, py } = getEventPos(event);
 	const coords = pixelToCoords(px, py);
 	if (coords && isVisible(coords.x, coords.y)) handleBoardClick(coords.x, coords.y);
+	if (state.interactionMode==MODE_PLAY) emits('madeMove')
 }
 
 function handleMouseMove(event) {
+	if (props.prohibit_actions) return;
 	const { px, py } = getEventPos(event);
 	const coords = pixelToCoords(px, py);
 	setHoveredCell(coords && isVisible(coords.x, coords.y) ? coords : null);
 }
 
-function handleMouseLeave() { setHoveredCell(null); }
+function handleMouseLeave() { 
+	if (props.prohibit_actions) return;
+	setHoveredCell(null); 
+}
 
 // ─── Реактивность ────────────────────────────────────────────────
 watch(

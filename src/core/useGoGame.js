@@ -347,42 +347,53 @@ export function buildVWString(visibleSet, boardSize) {
 	// ── Ход ──────────────────────────────────────────────────────
 
 	function placeStone(x, y) {
-		if (state.isGameOver) { setStatus('Игра завершена'); return false; }
-
-		// Переиспользуем существующую ветку
+		if (state.isGameOver) { 
+			setStatus('Игра завершена')
+			return false
+		}
+	  
 		const existingChild = state.currentNode.children.find(child =>
 			child.coords &&
 			child.coords.x === x &&
 			child.coords.y === y &&
 			child.color === state.currentColor
-		);
-
+		)
+	  
 		if (existingChild) {
-			goToNode(existingChild);
-			setStatus(`Ход ${existingChild.moveNumber}: переход к существующей ветке`);
-			return true;
+			goToNode(existingChild)
+			setStatus(`Ход ${existingChild.moveNumber}: переход к существующей ветке`)
+			return true
 		}
-
-		const result = engine.placeStone(x, y, state.currentColor);
-		if (!result.success) { setError(result.error); return false; }
-
+	  
+		const result = engine.placeStone(x, y, state.currentColor)
+		if (!result.success) 
+		{ 
+			setError(result.error) 
+			return false 
+		}
+	  
+		const colorKey = state.currentColor === BLACK ? 'B' : 'W'
+		const sgfCoord = SGFParser.coordsToSGF(x, y)
+	  
 		const node = makeNode(state.currentNode, {
-			isMove:     true,
-			color:      state.currentColor,
-			colorName:  state.currentColor === BLACK ? 'black' : 'white',
-			coords:     { x, y },
-			captures:   result.captures,
-			properties: {},
+			isMove:    true,
+			color:     state.currentColor,
+			colorName: state.currentColor === BLACK ? 'black' : 'white',
+			coords:    { x, y },
+			captures:  result.captures,
+			properties: {
+				[colorKey]: [sgfCoord],   // ← записываем ход в properties
+			},
 		});
-
-		state.currentNode.children.push(node);
-		state.currentNode       = node;
-		state.consecutivePasses = 0;
-		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK;
-
-		syncBoard();
-		setStatus(`Ход ${node.moveNumber}: ${node.colorName === 'black' ? 'Чёрные' : 'Белые'} → (${x + 1}, ${y + 1})`);
-		return true;
+	  
+		state.currentNode.children.push(node)
+		state.currentNode       = node
+		state.consecutivePasses = 0
+		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK
+	  
+		syncBoard()
+		setStatus(`Ход ${node.moveNumber}: ${node.colorName === 'black' ? 'Чёрные' : 'Белые'} → (${x + 1}, ${y + 1})`)
+		return true
 	}
 
 	// ── Undo — зависит от режима ─────────────────────────────────
@@ -460,33 +471,37 @@ export function buildVWString(visibleSet, boardSize) {
 	// ── Пас ──────────────────────────────────────────────────────
 
 	function pass() {
-		if (state.isGameOver) return;
-
+		if (state.isGameOver) return
+	  
 		const existingPass = state.currentNode.children.find(child =>
 			child.coords === null &&
 			child.color === state.currentColor
-		);
-
+		)
+	  
 		if (existingPass) {
-			goToNode(existingPass);
-			setStatus(`Ход ${existingPass.moveNumber}: переход к существующему пасу`);
-			return;
+			goToNode(existingPass)
+			setStatus(`Ход ${existingPass.moveNumber}: переход к существующему пасу`)
+			return
 		}
-
+	  
+		const colorKey = state.currentColor === BLACK ? 'B' : 'W'
+	  
 		const node = makeNode(state.currentNode, {
-			isMove:     true,
-			color:      state.currentColor,
-			colorName:  state.currentColor === BLACK ? 'black' : 'white',
-			coords:     null,
-			captures:   0,
-			properties: {},
+			isMove:    true,
+			color:     state.currentColor,
+			colorName: state.currentColor === BLACK ? 'black' : 'white',
+			coords:    null,
+			captures:  0,
+			properties: {
+				[colorKey]: [''],   // ← пас = пустая строка в SGF
+			},
 		});
-
-		state.currentNode.children.push(node);
-		state.currentNode       = node;
-		state.consecutivePasses++;
-		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK;
-		setStatus(`Ход ${node.moveNumber}: ПАС`);
+	  
+		state.currentNode.children.push(node)
+		state.currentNode       = node
+		state.consecutivePasses++
+		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK
+		setStatus(`Ход ${node.moveNumber}: ПАС`)
 	}
 
 	// ── Setup ────────────────────────────────────────────────────
@@ -758,38 +773,47 @@ export function buildVWString(visibleSet, boardSize) {
 
 	// ── SGF ──────────────────────────────────────────────────────
 
-	function loadSGF(sgfString) {
+	function loadSGF(sgfString, last_position = false) {
 		try {
 			const parser  = new SGFParser();
 			const sgfRoot = parser.parse(sgfString);
 			if (!sgfRoot) throw new Error('Не удалось разобрать SGF');
-
+	
 			const props = sgfRoot.properties || {};
-
+	
 			newGame({
 				size:        props.SZ  ? parseInt(props.SZ[0])   : 19,
 				komi:        props.KM  ? parseFloat(props.KM[0]) : 6.5,
 				playerBlack: props.PB?.[0],
 				playerWhite: props.PW?.[0],
 			});
-
+	
 			if (props.DT) state.gameInfo.date   = props.DT[0];
 			if (props.EV) state.gameInfo.event  = props.EV[0];
 			if (props.RE) state.gameInfo.result = props.RE[0];
-
+	
 			state.rootNode.properties = { ...props };
 			state.rootNode.comment    = sgfRoot.comment || props.C?.[0] || '';
-
+	
 			applySetupToEngine(engine, props);
 			syncBoard();
-
+	
 			// Применяем VW из корневого узла
 			if (props.VW) {
 				state.visiblePoints = parseVW(props.VW, state.boardSize);
 			}
-
+	
 			_buildTreeFromSGF(sgfRoot, state.rootNode);
-
+	
+			// Если last_position=true — переходим к последнему узлу главной ветки
+			if (last_position) {
+				let lastNode = state.rootNode;
+				while (lastNode.children && lastNode.children.length > 0) {
+					lastNode = lastNode.children[0];
+				}
+				goToNode(lastNode);
+			}
+	
 			setStatus('SGF загружен');
 			return true;
 		} catch (e) {
