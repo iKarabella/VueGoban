@@ -111,7 +111,13 @@ export class GoEngine
 		}
 
 		let koPoint = null;
-		if (capturedCount === 1 && ownLib.length === 1) koPoint = ownLib[0];
+		if (capturedCount === 1 && ownLib.length === 1) {
+			// Проверяем что поставленная группа — одиночный камень
+			const { stones: ownStones } = this._getGroup(newBoard, x, y);
+			if (ownStones.length === 1) {
+				koPoint = ownLib[0];
+			}
+		}
 
 		this.board    = newBoard;
 		this.captures[color] += capturedCount;

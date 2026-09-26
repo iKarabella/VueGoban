@@ -326,13 +326,13 @@ function onClick(e) {
     const layout = computeLayout(state.rootNode);
   
     for (const { col, row, node } of layout.values()) {
-		const { x, y } = nodeXY(col, row);
-		const dx = clickX - x;
-		const dy = clickY - y;
-		if (dx * dx + dy * dy <= NODE_R * NODE_R) {
-			goToNode(node);
-			return;
-		}
+      const { x, y } = nodeXY(col, row);
+      const dx = clickX - x;
+      const dy = clickY - y;
+      if (dx * dx + dy * dy <= NODE_R * NODE_R) {
+        goToNode(node);
+        return;
+      }
     }
 }
   

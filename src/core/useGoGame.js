@@ -14,6 +14,13 @@ export const MODE_ARROW     = 'arrow';
 
 const EXCLUSIVE_MARKS = ['TR', 'SQ', 'CR', 'MA'];
 
+const MODE_TO_MARK = {
+	[MODE_MARK_TR]: 'TR',
+	[MODE_MARK_SQ]: 'SQ',
+	[MODE_MARK_CR]: 'CR',
+	[MODE_MARK_MA]: 'MA',
+};
+
 // Режимы в которых кнопка "Отмена" активна
 export const UNDO_SUPPORTED_MODES = new Set([
 	MODE_PLAY,
@@ -24,6 +31,22 @@ export const UNDO_SUPPORTED_MODES = new Set([
 	MODE_ARROW,
 ]);
 
+/**
+ * Типы действий, которые эмитятся через onAction и понимаются applyAction.
+ * Удобно использовать в компоненте, чтобы отфильтровать «игровые» события
+ * от служебных (чат, передача контроля и т.п.)
+ */
+export const ACTION_TYPES = new Set([
+	'move', 'pass', 'undo_move',
+	'add_stone', 'remove_stone',
+	'mark_toggle', 'undo_marks',
+	'arrow_add', 'undo_arrows',
+	'set_vw', 'goto', 'comment',
+	'new_game', 'load_sgf', 'end_game',
+	'mode',
+]);
+
+// ─── Узлы дерева ─────────────────────────────────────────────────
 let _idCounter = 0;
 function makeId() { return ++_idCounter; }
 
@@ -61,6 +84,12 @@ function makeNode(parent, data) {
 	};
 }
 
+function reindexChildren(node) {
+	node.children.forEach((c, i) => { c.branchIndex = i; });
+}
+
+// ─── Пути ────────────────────────────────────────────────────────
+
 export function pathToRoot(node) {
 	const path = [];
 	let cur = node;
@@ -78,229 +107,267 @@ export function flattenTree(root) {
 	return rows;
 }
 
+/** Развёрнутый путь: массив branchIndex от корня до узла (оставлен для совместимости) */
+export function nodePath(node) {
+	const path = [];
+	let cur = node;
+	while (cur && cur.parent) { path.unshift(cur.branchIndex); cur = cur.parent; }
+	return path;
+}
+
+/**
+ * Компактный путь: RLE по branchIndex → [[branchIndex, count], ...]
+ * [0,0,0,1,0,0] → [[0,3],[1,1],[0,2]]; 320 ходов главной линии → [[0,320]]
+ */
+export function compactPath(node) {
+	const out = [];
+	let cur = node;
+	while (cur && cur.parent) {
+		const b = cur.branchIndex;
+		if (out.length && out[0][0] === b) out[0][1]++;
+		else out.unshift([b, 1]);
+		cur = cur.parent;
+	}
+	return out;
+}
+
+/** Найти узел по компактному пути. Возвращает null, если путь не существует в дереве */
+export function nodeByCompactPath(root, cpath) {
+	if (!root) return null;
+	if (!Array.isArray(cpath)) return null;
+	let cur = root;
+	for (const step of cpath) {
+		if (!Array.isArray(step) || step.length !== 2) return null;
+		const [b, n] = step;
+		for (let i = 0; i < n; i++) {
+			cur = cur.children?.[b];
+			if (!cur) return null;
+		}
+	}
+	return cur;
+}
+
+/** Развёрнутый путь → компактный */
+export function compressPath(flat) {
+	const out = [];
+	for (const b of flat ?? []) {
+		const last = out[out.length - 1];
+		if (last && last[0] === b) last[1]++;
+		else out.push([b, 1]);
+	}
+	return out;
+}
+
+/** Компактный путь → развёрнутый */
+export function expandPath(cpath) {
+	const out = [];
+	for (const [b, n] of cpath ?? []) for (let i = 0; i < n; i++) out.push(b);
+	return out;
+}
+
+// ─── Setup → движок ──────────────────────────────────────────────
+
 function applySetupToEngine(eng, props) {
 	if (!props) return;
 	if (props.AB) {
 		for (const sgf of props.AB) {
-		const c = SGFParser.sgfToCoords(sgf);
-		if (c) eng.setStone(c.x, c.y, BLACK);
+			const c = SGFParser.sgfToCoords(sgf);
+			if (c) eng.setStone(c.x, c.y, BLACK);
 		}
 	}
 	if (props.AW) {
 		for (const sgf of props.AW) {
-		const c = SGFParser.sgfToCoords(sgf);
-		if (c) eng.setStone(c.x, c.y, WHITE);
+			const c = SGFParser.sgfToCoords(sgf);
+			if (c) eng.setStone(c.x, c.y, WHITE);
 		}
 	}
 	if (props.AE) {
 		for (const sgf of props.AE) {
-		const c = SGFParser.sgfToCoords(sgf);
-		if (c) eng.removeStone(c.x, c.y);
+			const c = SGFParser.sgfToCoords(sgf);
+			if (c) eng.removeStone(c.x, c.y);
 		}
 	}
 }
 
-// ─── Парсинг VW ──────────────────────────────────────────────────
-// VW[aa:bi][ga:ia][gb][ib]
-// Возвращает Set строк "x,y" видимых точек, или null если VW не задан
+// ─── VW ──────────────────────────────────────────────────────────
+
 export function parseVW(vwValues, boardSize) {
 	if (!vwValues || vwValues.length === 0) return null;
-
-	// VW[] — очистка (вся доска видима)
 	if (vwValues.length === 1 && vwValues[0] === '') return null;
 
 	const visible = new Set();
 
 	for (const val of vwValues) {
 		if (val.includes(':')) {
-		// Прямоугольная область aa:bi
-		const [fromSGF, toSGF] = val.split(':');
-		const from = SGFParser.sgfToCoords(fromSGF);
-		const to   = SGFParser.sgfToCoords(toSGF);
-		if (!from || !to) continue;
+			const [fromSGF, toSGF] = val.split(':');
+			const from = SGFParser.sgfToCoords(fromSGF);
+			const to   = SGFParser.sgfToCoords(toSGF);
+			if (!from || !to) continue;
 
-		const minX = Math.min(from.x, to.x);
-		const maxX = Math.max(from.x, to.x);
-		const minY = Math.min(from.y, to.y);
-		const maxY = Math.max(from.y, to.y);
+			const minX = Math.min(from.x, to.x), maxX = Math.max(from.x, to.x);
+			const minY = Math.min(from.y, to.y), maxY = Math.max(from.y, to.y);
 
-		for (let y = minY; y <= maxY; y++) {
-			for (let x = minX; x <= maxX; x++) {
-			if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
-				visible.add(`${x},${y}`);
+			for (let y = minY; y <= maxY; y++) {
+				for (let x = minX; x <= maxX; x++) {
+					if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
+						visible.add(`${x},${y}`);
+					}
+				}
 			}
-			}
-		}
 		} else {
-		// Одна точка
-		const c = SGFParser.sgfToCoords(val);
-		if (c && c.x >= 0 && c.x < boardSize && c.y >= 0 && c.y < boardSize) {
-			visible.add(`${c.x},${c.y}`);
-		}
+			const c = SGFParser.sgfToCoords(val);
+			if (c && c.x >= 0 && c.x < boardSize && c.y >= 0 && c.y < boardSize) {
+				visible.add(`${c.x},${c.y}`);
+			}
 		}
 	}
 
 	return visible.size > 0 ? visible : null;
 }
 
-// Генерация SGF-строки VW из Set видимых точек
-// Пытается найти прямоугольник (если все точки образуют прямоугольник)
-// иначе перечисляет точки по одной
 export function buildVWString(visibleSet, boardSize) {
-		if (!visibleSet || visibleSet.size === 0) return '';
+	if (!visibleSet || visibleSet.size === 0) return '';
 
-		const points = [...visibleSet].map(k => {
-			const [x, y] = k.split(',').map(Number);
-			return { x, y };
-		});
-
-		// Проверяем: образуют ли точки прямоугольник
-		const minX = Math.min(...points.map(p => p.x));
-		const maxX = Math.max(...points.map(p => p.x));
-		const minY = Math.min(...points.map(p => p.y));
-		const maxY = Math.max(...points.map(p => p.y));
-
-		const rectSize = (maxX - minX + 1) * (maxY - minY + 1);
-
-		if (rectSize === points.length) {
-			// Все точки образуют прямоугольник
-			const from = SGFParser.coordsToSGF(minX, minY);
-			const to   = SGFParser.coordsToSGF(maxX, maxY);
-			return `[${from}:${to}]`;
-		}
-
-		// Иначе — перечисляем по одной
-		return points.map(p => `[${SGFParser.coordsToSGF(p.x, p.y)}]`)
-					.join('');
-	}
-
-	// ─── Состояние ───────────────────────────────────────────────────
-	const state = reactive({
-		boardSize:   19,
-		komi:        6.5,
-		gameInfo: {
-			playerBlack: 'Чёрные',
-			playerWhite: 'Белые',
-			date:        new Date().toISOString().split('T')[0],
-			event:       '',
-			result:      '',
-		},
-
-		rootNode:    makeRootNode(),
-		currentNode: null,
-
-		board:    [],
-		captures: { [BLACK]: 0, [WHITE]: 0 },
-		ko:       null,
-
-		currentColor:      BLACK,
-		isGameOver:        false,
-		consecutivePasses: 0,
-
-		interactionMode: MODE_PLAY,
-		arrowStart:      null,
-
-		// VW: Set<"x,y"> видимых точек или null (вся доска)
-		visiblePoints: null,
-
-		hoveredCell:   null,
-		statusMessage: '',
-		lastError:     '',
+	const points = [...visibleSet].map(k => {
+		const [x, y] = k.split(',').map(Number);
+		return { x, y };
 	});
 
-	state.currentNode = state.rootNode;
+	const minX = Math.min(...points.map(p => p.x));
+	const maxX = Math.max(...points.map(p => p.x));
+	const minY = Math.min(...points.map(p => p.y));
+	const maxY = Math.max(...points.map(p => p.y));
 
-	let engine = new GoEngine(state.boardSize);
-
-	function syncBoard() {
-		const s        = engine.getBoardState();
-		state.board    = s.board;
-		state.captures = s.captures;
-		state.ko       = s.ko;
+	if ((maxX - minX + 1) * (maxY - minY + 1) === points.length) {
+		return `[${SGFParser.coordsToSGF(minX, minY)}:${SGFParser.coordsToSGF(maxX, maxY)}]`;
 	}
 
-	syncBoard();
+	return points.map(p => `[${SGFParser.coordsToSGF(p.x, p.y)}]`).join('');
+}
 
-	// Обновить visiblePoints из текущего узла (ищем VW вверх по дереву)
-	function syncVW() {
-		// Ищем VW в пути от корня до текущего узла (последнее встреченное)
-		const path = pathToRoot(state.currentNode);
-		let vwValues = null;
+// ─── Состояние ───────────────────────────────────────────────────
+const state = reactive({
+	boardSize:   19,
+	komi:        6.5,
+	gameInfo: {
+		playerBlack: 'Чёрные',
+		playerWhite: 'Белые',
+		date:        new Date().toISOString().split('T')[0],
+		event:       '',
+		result:      '',
+	},
 
-		for (const node of path) {
-			const props = node.properties || {};
-			if (props.VW !== undefined) {
-			vwValues = props.VW;
-			}
-		}
+	rootNode:    makeRootNode(),
+	currentNode: null,
 
-		state.visiblePoints = parseVW(vwValues, state.boardSize);
+	board:    [],
+	captures: { [BLACK]: 0, [WHITE]: 0 },
+	ko:       null,
+
+	currentColor:      BLACK,
+	isGameOver:        false,
+	consecutivePasses: 0,
+
+	interactionMode: MODE_PLAY,
+	arrowStart:      null,
+
+	visiblePoints: null,
+
+	hoveredCell:   null,
+	statusMessage: '',
+	lastError:     '',
+});
+
+state.currentNode = state.rootNode;
+
+let engine = new GoEngine(state.boardSize);
+
+function syncBoard() {
+	const s        = engine.getBoardState();
+	state.board    = s.board;
+	state.captures = s.captures;
+	state.ko       = s.ko;
+}
+
+function syncVW() {
+	let vwValues = null;
+	for (const node of pathToRoot(state.currentNode)) {
+		const props = node.properties || {};
+		if (props.VW !== undefined) vwValues = props.VW;
 	}
+	state.visiblePoints = parseVW(vwValues, state.boardSize);
+}
 
-	function replayTo(node) {
-		engine = new GoEngine(state.boardSize);
+function replayTo(node) {
+	engine = new GoEngine(state.boardSize);
+	applySetupToEngine(engine, state.rootNode.properties);
 
-		applySetupToEngine(engine, state.rootNode.properties);
-
-		const path = pathToRoot(node).slice(1);
-		for (const n of path) {
-			const props = n.properties || {};
-			applySetupToEngine(engine, props);
-			if (n.coords && (n.color === BLACK || n.color === WHITE)) {
+	for (const n of pathToRoot(node).slice(1)) {
+		applySetupToEngine(engine, n.properties || {});
+		if (n.coords && (n.color === BLACK || n.color === WHITE)) {
 			engine.placeStone(n.coords.x, n.coords.y, n.color);
-			}
 		}
-
-		syncBoard();
 	}
+	syncBoard();
+}
 
-	// ─── Composable ──────────────────────────────────────────────────
-	export function useGoGame() {
-		const moveNumber        = computed(() => state.currentNode?.moveNumber ?? 0);
-		const currentColor      = computed(() => state.currentColor);
-		const currentColorName  = computed(() =>
-			state.currentColor === BLACK ? 'Чёрные' : 'Белые'
-		);
-		const currentPlayerName = computed(() =>
-			state.currentColor === BLACK
-			? state.gameInfo.playerBlack
-			: state.gameInfo.playerWhite
-		);
-		const capturesBlack  = computed(() => state.captures[BLACK]);
-		const capturesWhite  = computed(() => state.captures[WHITE]);
-		const currentNode    = computed(() => state.currentNode);
-		const currentComment = computed({
-			get: () => state.currentNode?.comment ?? '',
-			set: (val) => { if (state.currentNode) state.currentNode.comment = val; },
-		});
+syncBoard();
 
-		// canUndo зависит от режима
-		const canUndo = computed(() => {
-			if (!UNDO_SUPPORTED_MODES.has(state.interactionMode)) return false;
-			if (state.isGameOver) return false;
+// ─── Шина событий действий ───────────────────────────────────────
+const _actionListeners = new Set();
+let _muted = 0; // > 0 — эмит подавлен (применяем чужое действие)
 
-			if (state.interactionMode === MODE_PLAY) {
-			// Можно отменить только если текущий узел — ход (не setup)
-			return (
-				state.currentNode !== state.rootNode &&
-				state.currentNode.color !== null
-			);
+/**
+ * @param {string} type    тип действия
+ * @param {object} data    данные действия
+ * @param {object|null} atNode  узел, В КОТОРОМ действие применено
+ *                              (для move/pass — родитель нового узла; null — не важно)
+ */
+function emitAction(type, data = {}, atNode = state.currentNode) {
+	if (_muted > 0) return;
+	const payload = {
+		type,
+		data,
+		at: atNode ? compactPath(atNode) : null,
+		ts: Date.now(),
+	};
+	for (const cb of _actionListeners) {
+		try { cb(payload); } catch (e) { console.error('[useGoGame] onAction listener error:', e); }
+	}
+}
+
+// ─── Composable ──────────────────────────────────────────────────
+export function useGoGame() {
+	const moveNumber        = computed(() => state.currentNode?.moveNumber ?? 0);
+	const currentColor      = computed(() => state.currentColor);
+	const currentColorName  = computed(() => state.currentColor === BLACK ? 'Чёрные' : 'Белые');
+	const currentPlayerName = computed(() =>
+		state.currentColor === BLACK ? state.gameInfo.playerBlack : state.gameInfo.playerWhite
+	);
+	const capturesBlack  = computed(() => state.captures[BLACK]);
+	const capturesWhite  = computed(() => state.captures[WHITE]);
+	const currentNode    = computed(() => state.currentNode);
+	const currentComment = computed({
+		get: () => state.currentNode?.comment ?? '',
+		set: (val) => setComment(val),
+	});
+
+	const canUndo = computed(() => {
+		if (!UNDO_SUPPORTED_MODES.has(state.interactionMode)) return false;
+		if (state.isGameOver) return false;
+
+		if (state.interactionMode === MODE_PLAY) {
+			return state.currentNode !== state.rootNode && state.currentNode.color !== null;
 		}
 
-		// Для режимов меток — можно если есть хоть одна метка/стрелка
 		const props = state.currentNode?.properties || {};
-		if (state.interactionMode === MODE_MARK_TR) return !!(props.TR?.length);
-		if (state.interactionMode === MODE_MARK_SQ) return !!(props.SQ?.length);
-		if (state.interactionMode === MODE_MARK_CR) return !!(props.CR?.length);
-		if (state.interactionMode === MODE_MARK_MA) return !!(props.MA?.length);
-		if (state.interactionMode === MODE_ARROW)   return !!(props.AR?.length);
-
+		const mark  = MODE_TO_MARK[state.interactionMode];
+		if (mark) return !!(props[mark]?.length);
+		if (state.interactionMode === MODE_ARROW) return !!(props.AR?.length);
 		return false;
 	});
 
-	const canRedo = computed(() =>
-		(state.currentNode?.children?.length ?? 0) > 0
-	);
+	const canRedo = computed(() => (state.currentNode?.children?.length ?? 0) > 0);
 
 	const currentBranches = computed(() => state.currentNode?.children ?? []);
 	const currentMarks    = computed(() => state.currentNode?.properties ?? {});
@@ -312,6 +379,7 @@ export function buildVWString(visibleSet, boardSize) {
 		state.interactionMode = mode;
 		state.arrowStart      = null;
 		setStatus(modeLabel(mode));
+		emitAction('mode', { mode }, null);
 	}
 
 	function modeLabel(mode) {
@@ -326,7 +394,6 @@ export function buildVWString(visibleSet, boardSize) {
 			[MODE_MARK_MA]:   'Режим: Метка «X»',
 			[MODE_ARROW]:     'Режим: Стрелка',
 		};
-
 		return labels[mode] ?? mode;
 	}
 
@@ -346,88 +413,100 @@ export function buildVWString(visibleSet, boardSize) {
 
 	// ── Ход ──────────────────────────────────────────────────────
 
-	function placeStone(x, y) {
-		if (state.isGameOver) { 
-			setStatus('Игра завершена')
-			return false
-		}
-	  
-		const existingChild = state.currentNode.children.find(child =>
-			child.coords &&
-			child.coords.x === x &&
-			child.coords.y === y &&
-			child.color === state.currentColor
-		)
-	  
+	function placeStone(x, y, color = state.currentColor) {
+		if (state.isGameOver) { setStatus('Игра завершена'); return false; }
+
+		const parent = state.currentNode;
+
+		const existingChild = parent.children.find(c =>
+			c.coords && c.coords.x === x && c.coords.y === y && c.color === color
+		);
 		if (existingChild) {
-			goToNode(existingChild)
-			setStatus(`Ход ${existingChild.moveNumber}: переход к существующей ветке`)
-			return true
+			goToNode(existingChild, { silent: true });
+			setStatus(`Ход ${existingChild.moveNumber}: переход к существующей ветке`);
+			emitAction('move', { x, y, color }, parent);
+			return true;
 		}
-	  
-		const result = engine.placeStone(x, y, state.currentColor)
-		if (!result.success) 
-		{ 
-			setError(result.error) 
-			return false 
-		}
-	  
-		const colorKey = state.currentColor === BLACK ? 'B' : 'W'
-		const sgfCoord = SGFParser.coordsToSGF(x, y)
-	  
-		const node = makeNode(state.currentNode, {
+
+		const result = engine.placeStone(x, y, color);
+		if (!result.success) { setError(result.error); return false; }
+
+		const node = makeNode(parent, {
 			isMove:    true,
-			color:     state.currentColor,
-			colorName: state.currentColor === BLACK ? 'black' : 'white',
+			color,
+			colorName: color === BLACK ? 'black' : 'white',
 			coords:    { x, y },
 			captures:  result.captures,
-			properties: {
-				[colorKey]: [sgfCoord],   // ← записываем ход в properties
-			},
+			properties: { [color === BLACK ? 'B' : 'W']: [SGFParser.coordsToSGF(x, y)] },
 		});
-	  
-		state.currentNode.children.push(node)
-		state.currentNode       = node
-		state.consecutivePasses = 0
-		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK
-	  
-		syncBoard()
-		setStatus(`Ход ${node.moveNumber}: ${node.colorName === 'black' ? 'Чёрные' : 'Белые'} → (${x + 1}, ${y + 1})`)
-		return true
+
+		parent.children.push(node);
+		state.currentNode       = node;
+		state.consecutivePasses = 0;
+		state.currentColor      = color === BLACK ? WHITE : BLACK;
+
+		syncBoard();
+		syncVW();
+		setStatus(`Ход ${node.moveNumber}: ${color === BLACK ? 'Чёрные' : 'Белые'} → (${x + 1}, ${y + 1})`);
+		emitAction('move', { x, y, color }, parent);
+		return true;
 	}
 
-	// ── Undo — зависит от режима ─────────────────────────────────
+	// ── Пас ──────────────────────────────────────────────────────
+
+	function pass(color = state.currentColor) {
+		if (state.isGameOver) return false;
+
+		const parent = state.currentNode;
+
+		const existingPass = parent.children.find(c => c.coords === null && c.color === color);
+		if (existingPass) {
+			goToNode(existingPass, { silent: true });
+			setStatus(`Ход ${existingPass.moveNumber}: переход к существующему пасу`);
+			emitAction('pass', { color }, parent);
+			return true;
+		}
+
+		const node = makeNode(parent, {
+			isMove:    true,
+			color,
+			colorName: color === BLACK ? 'black' : 'white',
+			coords:    null,
+			captures:  0,
+			properties: { [color === BLACK ? 'B' : 'W']: [''] },
+		});
+
+		parent.children.push(node);
+		state.currentNode       = node;
+		state.consecutivePasses++;
+		state.currentColor      = color === BLACK ? WHITE : BLACK;
+		syncVW();
+		setStatus(`Ход ${node.moveNumber}: ПАС`);
+		emitAction('pass', { color }, parent);
+		return true;
+	}
+
+	// ── Undo ─────────────────────────────────────────────────────
 
 	function undo() {
 		if (!canUndo.value) return false;
-
 		const mode = state.interactionMode;
-
-		if (mode === MODE_PLAY) {
-			return _undoMove();
-		}
-
-		if ([MODE_MARK_TR, MODE_MARK_SQ, MODE_MARK_CR, MODE_MARK_MA].includes(mode)) {
-			return _undoMarks(mode);
-		}
-
-		if (mode === MODE_ARROW) {
-			return _undoArrows();
-		}
-
+		if (mode === MODE_PLAY)   return _undoMove();
+		if (MODE_TO_MARK[mode])   return _undoMarks(MODE_TO_MARK[mode]);
+		if (mode === MODE_ARROW)  return _undoArrows();
 		return false;
 	}
 
-	// Удалить текущий ход и вернуться к предыдущему узлу
 	function _undoMove() {
 		const node   = state.currentNode;
 		const parent = node.parent;
 		if (!parent) return false;
 
-		// Удаляем узел из дочерних родителя
-		parent.children = parent.children.filter(c => c.id !== node.id);
+		const at = compactPath(node); // путь считаем ДО удаления
 
-		// Переходим к родителю
+		parent.children = parent.children.filter(c => c.id !== node.id);
+		reindexChildren(parent);
+
 		replayTo(parent);
 		state.currentNode       = parent;
 		state.currentColor      = (parent.moveNumber % 2 === 0) ? BLACK : WHITE;
@@ -436,72 +515,35 @@ export function buildVWString(visibleSet, boardSize) {
 
 		syncVW();
 		setStatus('Ход удалён');
+		_emitRaw('undo_move', {}, at);
 		return true;
 	}
 
-	// Очистить все метки текущего типа в текущем узле
-	function _undoMarks(mode) {
-		const typeMap = {
-			[MODE_MARK_TR]: 'TR',
-			[MODE_MARK_SQ]: 'SQ',
-			[MODE_MARK_CR]: 'CR',
-			[MODE_MARK_MA]: 'MA',
-		};
-		const type  = typeMap[mode];
+	function _undoMarks(type) {
 		const props = state.currentNode.properties;
-		if (props[type]) {
-			delete props[type];
-			setStatus(`Все метки ${type} удалены`);
-			return true;
-		}
-		return false;
+		if (!props[type]) return false;
+		delete props[type];
+		setStatus(`Все метки ${type} удалены`);
+		emitAction('undo_marks', { type });
+		return true;
 	}
 
-	// Удалить все стрелки текущего узла
 	function _undoArrows() {
 		const props = state.currentNode.properties;
-		if (props.AR) {
-			delete props.AR;
-			setStatus('Все стрелки удалены');
-			return true;
-		}
-		return false;
+		if (!props.AR) return false;
+		delete props.AR;
+		setStatus('Все стрелки удалены');
+		emitAction('undo_arrows');
+		return true;
 	}
 
-	// ── Пас ──────────────────────────────────────────────────────
-
-	function pass() {
-		if (state.isGameOver) return
-	  
-		const existingPass = state.currentNode.children.find(child =>
-			child.coords === null &&
-			child.color === state.currentColor
-		)
-	  
-		if (existingPass) {
-			goToNode(existingPass)
-			setStatus(`Ход ${existingPass.moveNumber}: переход к существующему пасу`)
-			return
+	// вариант emitAction с уже посчитанным путём (узел мог быть удалён)
+	function _emitRaw(type, data, at) {
+		if (_muted > 0) return;
+		const payload = { type, data, at, ts: Date.now() };
+		for (const cb of _actionListeners) {
+			try { cb(payload); } catch (e) { console.error('[useGoGame] onAction listener error:', e); }
 		}
-	  
-		const colorKey = state.currentColor === BLACK ? 'B' : 'W'
-	  
-		const node = makeNode(state.currentNode, {
-			isMove:    true,
-			color:     state.currentColor,
-			colorName: state.currentColor === BLACK ? 'black' : 'white',
-			coords:    null,
-			captures:  0,
-			properties: {
-				[colorKey]: [''],   // ← пас = пустая строка в SGF
-			},
-		});
-	  
-		state.currentNode.children.push(node)
-		state.currentNode       = node
-		state.consecutivePasses++
-		state.currentColor      = state.currentColor === BLACK ? WHITE : BLACK
-		setStatus(`Ход ${node.moveNumber}: ПАС`)
 	}
 
 	// ── Setup ────────────────────────────────────────────────────
@@ -521,12 +563,13 @@ export function buildVWString(visibleSet, boardSize) {
 			if (props.AE.length === 0) delete props.AE;
 		}
 
-		if (!props[key]) props[key] = [];
+		props[key] ??= [];
 		if (!props[key].includes(sgf)) props[key].push(sgf);
 
 		engine.setStone(x, y, color);
 		syncBoard();
 		setStatus(`Камень ${color === BLACK ? 'чёрный' : 'белый'} добавлен: ${sgf}`);
+		emitAction('add_stone', { x, y, color });
 		return true;
 	}
 
@@ -536,19 +579,20 @@ export function buildVWString(visibleSet, boardSize) {
 		const sgf   = SGFParser.coordsToSGF(x, y);
 		const props = state.currentNode.properties;
 
-		['AB', 'AW'].forEach(k => {
+		for (const k of ['AB', 'AW']) {
 			if (props[k]) {
 				props[k] = props[k].filter(c => c !== sgf);
 				if (props[k].length === 0) delete props[k];
 			}
-		});
+		}
 
-		if (!props.AE) props.AE = [];
+		props.AE ??= [];
 		if (!props.AE.includes(sgf)) props.AE.push(sgf);
 
 		engine.removeStone(x, y);
 		syncBoard();
 		setStatus(`Камень убран: ${sgf}`);
+		emitAction('remove_stone', { x, y });
 		return true;
 	}
 
@@ -560,21 +604,22 @@ export function buildVWString(visibleSet, boardSize) {
 
 		let wasRemoved = false;
 		for (const mark of EXCLUSIVE_MARKS) {
-			if (props[mark]) {
-				const idx = props[mark].indexOf(sgf);
-				if (idx !== -1) {
+			const idx = props[mark]?.indexOf(sgf) ?? -1;
+			if (idx !== -1) {
 				props[mark].splice(idx, 1);
 				if (props[mark].length === 0) delete props[mark];
 				if (mark === type) wasRemoved = true;
-				}
 			}
 		}
 
-		if (wasRemoved) { setStatus(`Метка ${type} убрана`); return; }
-
-		if (!props[type]) props[type] = [];
-		props[type].push(sgf);
-		setStatus(`Метка ${type} добавлена`);
+		if (wasRemoved) {
+			setStatus(`Метка ${type} убрана`);
+		} else {
+			(props[type] ??= []).push(sgf);
+			setStatus(`Метка ${type} добавлена`);
+		}
+		emitAction('mark_toggle', { type, x, y });
+		return true;
 	}
 
 	// ── Стрелки ──────────────────────────────────────────────────
@@ -583,113 +628,88 @@ export function buildVWString(visibleSet, boardSize) {
 		if (!state.arrowStart) {
 			state.arrowStart = { x, y };
 			setStatus(`Стрелка: начало (${x + 1}, ${y + 1}). Кликните конец.`);
-		} else {
-			const from = state.arrowStart;
-			const to   = { x, y };
-			state.arrowStart = null;
-
-			if (from.x === to.x && from.y === to.y) {
-				setError('Стрелка не может начинаться и заканчиваться в одной точке');
-				return;
-			}
-
-			const arrowSGF = `${SGFParser.coordsToSGF(from.x, from.y)}:${SGFParser.coordsToSGF(to.x, to.y)}`;
-			const props    = state.currentNode.properties;
-
-			if (!props.AR) props.AR = [];
-			if (props.AR.includes(arrowSGF)) { setError('Такая стрелка уже существует'); return; }
-
-			props.AR.push(arrowSGF);
-			setStatus('Стрелка добавлена');
+			return;
 		}
+		const from = state.arrowStart;
+		state.arrowStart = null;
+		return addArrow(from, { x, y });
+	}
+
+	function addArrow(from, to) {
+		if (!from || !to) return false;
+		if (from.x === to.x && from.y === to.y) {
+			setError('Стрелка не может начинаться и заканчиваться в одной точке');
+			return false;
+		}
+
+		const arrowSGF = `${SGFParser.coordsToSGF(from.x, from.y)}:${SGFParser.coordsToSGF(to.x, to.y)}`;
+		const props    = state.currentNode.properties;
+
+		props.AR ??= [];
+		if (props.AR.includes(arrowSGF)) { setError('Такая стрелка уже существует'); return false; }
+
+		props.AR.push(arrowSGF);
+		setStatus('Стрелка добавлена');
+		emitAction('arrow_add', { from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y } });
+		return true;
 	}
 
 	// ── VW ───────────────────────────────────────────────────────
 
-	/**
-	* Установить VW вручную (массив SGF-строк)
-	* Например: ['aa:bi', 'ga:ia', 'gb']
-	* Передать [] или [''] — очистить VW (вся доска видима)
-	*/
 	function setVW(vwValues) {
 		const props = state.currentNode.properties;
 
 		if (!vwValues || vwValues.length === 0 || (vwValues.length === 1 && vwValues[0] === '')) {
-			// Очищаем VW
 			delete props.VW;
-			state.visiblePoints = null;
+			syncVW();
 			setStatus('VW очищен — вся доска видима');
+			emitAction('set_vw', { vw: null });
 		} else {
-			props.VW            = vwValues;
+			props.VW            = [...vwValues];
 			state.visiblePoints = parseVW(vwValues, state.boardSize);
 			setStatus('VW обновлён');
+			emitAction('set_vw', { vw: [...vwValues] });
 		}
 	}
 
-	/**
-	 * Вычислить VW автоматически по занятым камнями точкам.
-	 * @param {number} padding — отступ от крайних камней (по умолчанию 2)
-	 */
 	function cutBoard(padding = 2) {
-		// Собираем все координаты камней из всего дерева
-		let minX = Infinity, maxX = -Infinity;
-		let minY = Infinity, maxY = -Infinity;
+		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+		const take = (x, y) => {
+			minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+			minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+		};
 
 		function collectStones(node) {
 			const props = node.properties || {};
-
-			// Камни из ходов
-			if (node.coords) {
-				minX = Math.min(minX, node.coords.x);
-				maxX = Math.max(maxX, node.coords.x);
-				minY = Math.min(minY, node.coords.y);
-				maxY = Math.max(maxY, node.coords.y);
-			}
-
-			// Камни из AB/AW
+			if (node.coords) take(node.coords.x, node.coords.y);
 			for (const key of ['AB', 'AW']) {
-				if (props[key]) {
-				for (const sgf of props[key]) {
+				for (const sgf of props[key] ?? []) {
 					const c = SGFParser.sgfToCoords(sgf);
-					if (c) {
-					minX = Math.min(minX, c.x);
-					maxX = Math.max(maxX, c.x);
-					minY = Math.min(minY, c.y);
-					maxY = Math.max(maxY, c.y);
-					}
-				}
+					if (c) take(c.x, c.y);
 				}
 			}
-
 			node.children.forEach(collectStones);
 		}
 
 		collectStones(state.rootNode);
 
-		if (minX === Infinity) {
-			setError('Нет камней на доске');
-			return;
-		}
+		if (minX === Infinity) { setError('Нет камней на доске'); return; }
 
-		// Применяем отступ и зажимаем в границы доски
 		const size = state.boardSize;
-		const x0   = Math.max(0,        minX - padding);
-		const y0   = Math.max(0,        minY - padding);
-		const x1   = Math.min(size - 1, maxX + padding);
-		const y1   = Math.min(size - 1, maxY + padding);
+		const x0 = Math.max(0, minX - padding), y0 = Math.max(0, minY - padding);
+		const x1 = Math.min(size - 1, maxX + padding), y1 = Math.min(size - 1, maxY + padding);
 
-		const fromSGF = SGFParser.coordsToSGF(x0, y0);
-		const toSGF   = SGFParser.coordsToSGF(x1, y1);
-		const vwStr   = `${fromSGF}:${toSGF}`;
-
+		const vwStr = `${SGFParser.coordsToSGF(x0, y0)}:${SGFParser.coordsToSGF(x1, y1)}`;
 		setVW([vwStr]);
 		setStatus(`VW установлен: ${vwStr} (отступ ${padding})`);
 	}
 
 	// ── Навигация ────────────────────────────────────────────────
 
-	function goToNode(node) {
-		if (!node) return;
+	function goToNode(node, { silent = false } = {}) {
+		if (!node) return false;
+
 		replayTo(node);
 		state.currentNode       = node;
 		state.currentColor      = (node.moveNumber % 2 === 0) ? BLACK : WHITE;
@@ -697,22 +717,28 @@ export function buildVWString(visibleSet, boardSize) {
 		state.isGameOver        = false;
 		state.arrowStart        = null;
 		syncVW();
-		setStatus(
-		node === state.rootNode
-			? 'Начало игры'
-			: `Переход к ходу ${node.moveNumber}`
-		);
+		setStatus(node === state.rootNode ? 'Начало игры' : `Переход к ходу ${node.moveNumber}`);
+
+		if (!silent) emitAction('goto', { to: compactPath(node) }, null);
+		return true;
 	}
 
-	function redo()      { if (canRedo.value) { goToNode(state.currentNode.children[0]); return true; } return false; }
+	/** Переход по компактному пути [[branchIndex, count], ...] */
+	function goToNodeByPath(to, opts) {
+		const node = nodeByCompactPath(state.rootNode, to);
+		if (!node) return false;
+		return goToNode(node, opts);
+	}
+
+	function redo()      { return canRedo.value ? goToNode(state.currentNode.children[0]) : false; }
 	function goToStart() { goToNode(state.rootNode); }
 	function goToEnd()   {
 		let node = state.currentNode;
 		while (node.children.length > 0) node = node.children[0];
 		goToNode(node);
 	}
-	function nextMove()  { if (canRedo.value)  goToNode(state.currentNode.children[0]); }
-	function prevMove()  { if (canUndo.value && state.interactionMode === MODE_PLAY) goToNode(state.currentNode.parent); }
+	function nextMove()  { if (canRedo.value) goToNode(state.currentNode.children[0]); }
+	function prevMove()  { if (state.currentNode?.parent) goToNode(state.currentNode.parent); }
 
 	// ── Завершение ───────────────────────────────────────────────
 
@@ -720,11 +746,11 @@ export function buildVWString(visibleSet, boardSize) {
 		state.isGameOver      = true;
 		state.gameInfo.result = result ?? '';
 		setStatus(`Игра завершена: ${formatResult(result)}`);
+		emitAction('end_game', { result: state.gameInfo.result }, null);
 	}
 
 	function resign() {
-		const winner = state.currentColor === BLACK ? 'W' : 'B';
-		endGame(`${winner}+R`);
+		endGame(`${state.currentColor === BLACK ? 'W' : 'B'}+R`);
 	}
 
 	function formatResult(result) {
@@ -745,7 +771,7 @@ export function buildVWString(visibleSet, boardSize) {
 
 	// ── Новая игра ───────────────────────────────────────────────
 
-	function newGame(options = {}) {
+	function newGame(options = {}, { silent = false } = {}) {
 		const { size = 19, komi = 6.5, playerBlack, playerWhite } = options;
 		state.boardSize = size;
 		state.komi      = komi;
@@ -769,52 +795,52 @@ export function buildVWString(visibleSet, boardSize) {
 
 		syncBoard();
 		setStatus('Новая игра начата');
+		if (!silent) emitAction('new_game', {
+			size:        state.boardSize,
+			komi:        state.komi,
+			playerBlack: state.gameInfo.playerBlack,
+			playerWhite: state.gameInfo.playerWhite,
+		}, null);
 	}
 
 	// ── SGF ──────────────────────────────────────────────────────
 
-	function loadSGF(sgfString, last_position = false) {
+	function loadSGF(sgfString, last_position = false, { silent = false } = {}) {
 		try {
 			const parser  = new SGFParser();
 			const sgfRoot = parser.parse(sgfString);
 			if (!sgfRoot) throw new Error('Не удалось разобрать SGF');
-	
+
 			const props = sgfRoot.properties || {};
-	
+
 			newGame({
-				size:        props.SZ  ? parseInt(props.SZ[0])   : 19,
-				komi:        props.KM  ? parseFloat(props.KM[0]) : 6.5,
+				size:        props.SZ ? parseInt(props.SZ[0])   : 19,
+				komi:        props.KM ? parseFloat(props.KM[0]) : 6.5,
 				playerBlack: props.PB?.[0],
 				playerWhite: props.PW?.[0],
-			});
-	
+			}, { silent: true });
+
 			if (props.DT) state.gameInfo.date   = props.DT[0];
 			if (props.EV) state.gameInfo.event  = props.EV[0];
 			if (props.RE) state.gameInfo.result = props.RE[0];
-	
+
 			state.rootNode.properties = { ...props };
 			state.rootNode.comment    = sgfRoot.comment || props.C?.[0] || '';
-	
+
 			applySetupToEngine(engine, props);
 			syncBoard();
-	
-			// Применяем VW из корневого узла
-			if (props.VW) {
-				state.visiblePoints = parseVW(props.VW, state.boardSize);
-			}
-	
+			syncVW();
+
 			_buildTreeFromSGF(sgfRoot, state.rootNode);
-	
-			// Если last_position=true — переходим к последнему узлу главной ветки
+
 			if (last_position) {
 				let lastNode = state.rootNode;
-				while (lastNode.children && lastNode.children.length > 0) {
-					lastNode = lastNode.children[0];
-				}
-				goToNode(lastNode);
+				while (lastNode.children.length > 0) lastNode = lastNode.children[0];
+				goToNode(lastNode, { silent: true });
 			}
-	
+
 			setStatus('SGF загружен');
+			if (!silent) emitAction('load_sgf', { sgf: sgfString, lastPosition: !!last_position }, null);
 			return true;
 		} catch (e) {
 			setError(`Ошибка загрузки SGF: ${e.message}`);
@@ -827,23 +853,17 @@ export function buildVWString(visibleSet, boardSize) {
 		for (const sgfChild of sgfNode.children) {
 			const props = sgfChild.properties || {};
 
-			let color  = null;
-			let coords = null;
-			let isMove = false;
+			let color = null, coords = null, isMove = false;
 
 			if (props.B !== undefined) {
-				color  = BLACK;
-				coords = SGFParser.sgfToCoords(props.B[0]);
-				isMove = true;
+				color = BLACK; coords = SGFParser.sgfToCoords(props.B[0]); isMove = true;
 			} else if (props.W !== undefined) {
-				color  = WHITE;
-				coords = SGFParser.sgfToCoords(props.W[0]);
-				isMove = true;
+				color = WHITE; coords = SGFParser.sgfToCoords(props.W[0]); isMove = true;
 			}
 
 			const hasSetup   = !!(props.AB || props.AW || props.AE);
 			const hasMarks   = !!(props.TR || props.SQ || props.CR || props.MA || props.AR);
-			const hasVW      = !!(props.VW);
+			const hasVW      = !!props.VW;
 			const hasComment = !!(sgfChild.comment || props.C?.[0]);
 
 			if (!isMove && !hasSetup && !hasMarks && !hasVW && !hasComment) {
@@ -881,10 +901,75 @@ export function buildVWString(visibleSet, boardSize) {
 		});
 	}
 
-	function setComment(comment)  { if (state.currentNode) state.currentNode.comment = comment; }
+	// ── Прочее ───────────────────────────────────────────────────
+
+	function setComment(comment) {
+		if (!state.currentNode) return;
+		if (state.currentNode.comment === comment) return;
+		state.currentNode.comment = comment;
+		emitAction('comment', { comment });
+	}
 	function setHoveredCell(cell) { state.hoveredCell = cell; }
 	function setStatus(msg)       { state.statusMessage = msg; state.lastError = ''; }
 	function setError(msg)        { state.lastError = msg; state.statusMessage = ''; }
+
+	function onAction(cb) {
+		_actionListeners.add(cb);
+		return () => _actionListeners.delete(cb);
+	}
+
+	// ── Применение удалённого действия ───────────────────────────
+
+	/**
+	 * Применить действие, пришедшее по websocket. Ничего не эмитит.
+	 * @returns {boolean} false — если действие не удалось применить
+	 *                    (например, узел `at` не найден → нужен ресинк).
+	 */
+	function applyAction(action) {
+		const { type, data = {}, at } = action ?? {};
+		if (!type) return false;
+
+		_muted++;
+		try {
+			// Действия без привязки к узлу
+			switch (type) {
+				case 'goto':     return goToNodeByPath(data.to);
+				case 'new_game': newGame(data); return true;
+				case 'load_sgf': return loadSGF(data.sgf, !!data.lastPosition);
+				case 'end_game': endGame(data.result); return true;
+				case 'mode':     setInteractionMode(data.mode); return true;
+			}
+
+			// Остальные применяются в конкретном узле
+			if (at) {
+				const atNode = nodeByCompactPath(state.rootNode, at);
+				if (!atNode) {
+					console.warn('[useGoGame] applyAction: узел не найден', action);
+					return false;
+				}
+				if (atNode !== state.currentNode) goToNode(atNode);
+			}
+
+			switch (type) {
+				case 'move':         return placeStone(data.x, data.y, data.color ?? state.currentColor);
+				case 'pass':         return pass(data.color ?? state.currentColor);
+				case 'undo_move':    return _undoMove();
+				case 'add_stone':    return addSetupStone(data.x, data.y, data.color);
+				case 'remove_stone': return removeSetupStone(data.x, data.y);
+				case 'mark_toggle':  return toggleMark(data.type, data.x, data.y);
+				case 'arrow_add':    return addArrow(data.from, data.to);
+				case 'undo_marks':   return _undoMarks(data.type);
+				case 'undo_arrows':  return _undoArrows();
+				case 'set_vw':       setVW(data.vw ?? []); return true;
+				case 'comment':      setComment(data.comment ?? ''); return true;
+				default:
+					console.warn('[useGoGame] applyAction: неизвестный тип', type);
+					return false;
+			}
+		} finally {
+			_muted--;
+		}
+	}
 
 	return {
 		state,
@@ -894,14 +979,16 @@ export function buildVWString(visibleSet, boardSize) {
 		BLACK, WHITE, EMPTY,
 		MODE_PLAY, MODE_ADD_BLACK, MODE_ADD_WHITE, MODE_REMOVE,
 		MODE_MARK_TR, MODE_MARK_SQ, MODE_MARK_CR, MODE_MARK_MA, MODE_ARROW,
-		UNDO_SUPPORTED_MODES,
+		UNDO_SUPPORTED_MODES, ACTION_TYPES,
+		onAction, applyAction,
+		nodePath, compactPath, nodeByCompactPath, compressPath, expandPath, goToNodeByPath,
 		handleBoardClick, placeStone, pass, undo, redo,
 		goToNode, goToStart, goToEnd, nextMove, prevMove,
 		endGame, resign, formatResult,
 		newGame, setComment, setHoveredCell,
 		loadSGF, exportSGF,
 		setInteractionMode,
-		setVW, cutBoard,
+		addArrow, setVW, cutBoard,
 		pathToRoot, flattenTree,
 		parseVW, buildVWString,
 	};

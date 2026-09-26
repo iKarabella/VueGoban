@@ -13,27 +13,35 @@
 	</div>
 </template>
 
+<style scoped>
+.goboard-wrapper {
+	display: inline-block;
+	border-radius: 4px;
+	overflow: hidden;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.goboard-canvas     { display: block; max-width: 100%; height: auto; }
+.cursor-crosshair   { cursor: crosshair; }
+.cursor-mark        { cursor: cell; }
+.cursor-remove      { cursor: not-allowed; }
+.cursor-arrow-start { cursor: copy; }
+.cursor-arrow-end   { cursor: crosshair; }
+</style>
+
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { useGoGame } from '../core/useGoGame.js';
 import { SGFParser } from '../core/SGFParser.js';
 
 const props = defineProps({
-	ignore_vw: {
-		type:    Boolean,
-		default: false,
-	},
-	show_coordinates: {
-		type:    Boolean,
-		default: true,
-	},
-	prohibit_actions:{
-		type:	 Boolean,
-		default: false
-	}
+	ignore_vw:        { type: Boolean, default: false },
+	show_coordinates: { type: Boolean, default: true },
+	prohibit_actions: { type: Boolean, default: false },
+	min_side:         { type: Number,  default: null },
 });
 
-const emits = defineEmits(['madeMove'])
+const emits = defineEmits(['madeMove']);
 
 const {
 	state, handleBoardClick, setHoveredCell,
@@ -44,11 +52,12 @@ const {
 
 const canvas = ref(null);
 
-// ─── Константы ───────────────────────────────────────────────────
-const CELL_SIZE    = 36;   // расстояние между линиями сетки
-const COORD_MARGIN = 48;   // ширина полосы под координаты
-const EDGE_MARGIN  = 32;   // отступ от линии сетки до края canvas (без координат)
-const OVERHANG     = CELL_SIZE * 0.45; // выпуск линии за обрезанный край
+// ─── Базовые константы (при scale = 1) ───────────────────────────
+const BASE_CELL         = 36;   // расстояние между линиями сетки
+const BASE_COORD_MARGIN = 48;   // ширина полосы под координаты
+const BASE_EDGE_MARGIN  = 32;   // отступ до края canvas (без координат)
+const OVERHANG_RATIO    = 0.45; // выпуск линии за обрезанный край (в клетках)
+const BASE_FONT         = 13;
 
 // ─── Видимый диапазон линий ───────────────────────────────────────
 const visibleRange = computed(() => {
@@ -68,50 +77,63 @@ const visibleRange = computed(() => {
 	return minCol === Infinity ? full : { minCol, maxCol, minRow, maxRow };
 });
 
-// ─── Отступы сетки от краёв canvas ───────────────────────────────
-// Каждый край: если там есть координаты → COORD_MARGIN, иначе → EDGE_MARGIN
-// Координаты рисуются на всех 4 краях если show_coordinates=true
+const visibleCols = computed(() => visibleRange.value.maxCol - visibleRange.value.minCol + 1);
+const visibleRows = computed(() => visibleRange.value.maxRow - visibleRange.value.minRow + 1);
+
+// ─── Масштаб ─────────────────────────────────────────────────────
+// Базовый размер доски при scale = 1
+const basePad  = computed(() => props.show_coordinates ? BASE_COORD_MARGIN : BASE_EDGE_MARGIN);
+const baseSize = computed(() => ({
+	w: basePad.value * 2 + (visibleCols.value - 1) * BASE_CELL,
+	h: basePad.value * 2 + (visibleRows.value - 1) * BASE_CELL,
+}));
+
+// Если задан min_side — подгоняем БОЛЬШУЮ сторону под него,
+// тогда ни одна сторона не превысит min_side.
+const scale = computed(() => {
+	if (!props.min_side || props.min_side <= 0) return 1;
+	const side = Math.max(baseSize.value.w, baseSize.value.h);
+	return props.min_side / side;
+});
+
+// ─── Масштабированные размеры ────────────────────────────────────
+const cell     = computed(() => BASE_CELL * scale.value);
+const overhangLen = computed(() => cell.value * OVERHANG_RATIO);
+const fontSize = computed(() => Math.max(8, BASE_FONT * scale.value));
+const lw       = computed(() => Math.max(1, 2 * scale.value)); // базовая толщина линий меток
+
 const pad = computed(() => {
-	const c = props.show_coordinates ? COORD_MARGIN : EDGE_MARGIN;
+	const c = basePad.value * scale.value;
 	return { left: c, right: c, top: c, bottom: c };
 });
 
-// ─── Выпуски линий за обрезанные края ────────────────────────────
 const overhang = computed(() => {
 	const { minCol, maxCol, minRow, maxRow } = visibleRange.value;
 	const size = state.boardSize;
+	const o = overhangLen.value;
 	return {
-		left:   minCol > 0        ? OVERHANG : 0,
-		right:  maxCol < size - 1 ? OVERHANG : 0,
-		top:    minRow > 0        ? OVERHANG : 0,
-		bottom: maxRow < size - 1 ? OVERHANG : 0,
+		left:   minCol > 0        ? o : 0,
+		right:  maxCol < size - 1 ? o : 0,
+		top:    minRow > 0        ? o : 0,
+		bottom: maxRow < size - 1 ? o : 0,
 	};
 });
 
 // ─── Размер canvas ───────────────────────────────────────────────
-// Размер = отступы с обеих сторон + размер сетки
-// Выпуск линий НЕ влияет на размер canvas — линии рисуются
-// поверх зоны координат, но не выходят за пределы canvas
-const visibleCols = computed(() =>
-  	visibleRange.value.maxCol - visibleRange.value.minCol + 1
-);
-const visibleRows = computed(() =>
-  	visibleRange.value.maxRow - visibleRange.value.minRow + 1
-);
-
-const canvasSize = computed(() => ({
-	w: pad.value.left + pad.value.right  + (visibleCols.value - 1) * CELL_SIZE,
-	h: pad.value.top  + pad.value.bottom + (visibleRows.value - 1) * CELL_SIZE,
-}));
+// Math.floor гарантирует, что при заданном min_side ни одна сторона
+// не превысит его (возможна недостача < 1px из-за округления).
+const canvasSize = computed(() => {
+	const w = pad.value.left + pad.value.right  + (visibleCols.value - 1) * cell.value;
+	const h = pad.value.top  + pad.value.bottom + (visibleRows.value - 1) * cell.value;
+	return { w: Math.floor(w), h: Math.floor(h) };
+});
 
 // ─── Перевод координат доски → пиксели ───────────────────────────
-// Точки сетки всегда отступают ровно на pad от края canvas.
-// Выпуск линий — это только удлинение линий, не смещение точек.
 function lineX(col) {
-  	return pad.value.left + (col - visibleRange.value.minCol) * CELL_SIZE;
+	return pad.value.left + (col - visibleRange.value.minCol) * cell.value;
 }
 function lineY(row) {
-  	return pad.value.top  + (row - visibleRange.value.minRow) * CELL_SIZE;
+	return pad.value.top  + (row - visibleRange.value.minRow) * cell.value;
 }
 
 // ─── Видимость точки ─────────────────────────────────────────────
@@ -162,7 +184,6 @@ function draw() {
 	drawArrowStartMarker(ctx);
 }
 
-// ─── Фон ─────────────────────────────────────────────────────────
 function drawBackground(ctx, w, h) {
 	ctx.save();
 	ctx.shadowColor = 'rgba(0,0,0,0.45)';
@@ -177,13 +198,9 @@ function drawBackground(ctx, w, h) {
 	ctx.restore();
 }
 
-// ─── Сетка ───────────────────────────────────────────────────────
 function drawGrid(ctx) {
 	const { minCol, maxCol, minRow, maxRow } = visibleRange.value;
 	const oh = overhang.value;
-
-	// Линии выходят за крайние точки на OVERHANG если край обрезан.
-	// Ограничиваем выпуск так чтобы линия не выходила за canvas.
 	const x0 = lineX(minCol) - oh.left;
 	const x1 = lineX(maxCol) + oh.right;
 	const y0 = lineY(minRow) - oh.top;
@@ -191,8 +208,7 @@ function drawGrid(ctx) {
 
 	ctx.save();
 	ctx.strokeStyle = '#5a3e1b';
-	ctx.lineWidth   = 1;
-
+	ctx.lineWidth   = Math.max(0.5, scale.value);
 	for (let row = minRow; row <= maxRow; row++) {
 		const py = lineY(row);
 		ctx.beginPath(); ctx.moveTo(x0, py); ctx.lineTo(x1, py); ctx.stroke();
@@ -204,89 +220,71 @@ function drawGrid(ctx) {
 	ctx.restore();
 }
 
-// ─── Звёздные точки ──────────────────────────────────────────────
 function drawStarPoints(ctx) {
 	ctx.save();
 	ctx.fillStyle = '#5a3e1b';
+	const r = Math.max(1.5, 4 * scale.value);
 	for (const [col, row] of starPoints.value) {
 		ctx.beginPath();
-		ctx.arc(lineX(col), lineY(row), 4, 0, Math.PI * 2);
+		ctx.arc(lineX(col), lineY(row), r, 0, Math.PI * 2);
 		ctx.fill();
 	}
 	ctx.restore();
 }
 
-// ─── Координаты ──────────────────────────────────────────────────
-// Текст рисуется строго посередине между краем canvas и линией сетки.
-// Для каждого края это одинаковое расстояние = pad / 2.
-//
-//  canvas край (0)
-//  |←── pad ──►|
-//  |  ← pad/2 →|← pad/2 →|
-//  |  [текст]  |  [линия] |
-//
 function drawCoordinates(ctx) {
 	const { minCol, maxCol, minRow, maxRow } = visibleRange.value;
 	const { w, h } = canvasSize.value;
 	const letters  = 'ABCDEFGHJKLMNOPQRST';
 	const p        = pad.value;
 
-	// Позиции текста: ровно посередине между краем canvas и линией сетки
-	const xNear = p.left   / 2;       // левая колонка координат
-	const xFar  = w - p.right  / 2;   // правая колонка координат
-	const yNear = p.top    / 2;       // верхняя строка координат
-	const yFar  = h - p.bottom / 2;   // нижняя строка координат
+	const xNear = p.left / 2;
+	const xFar  = w - p.right / 2;
+	const yNear = p.top / 2;
+	const yFar  = h - p.bottom / 2;
 
 	ctx.save();
 	ctx.fillStyle    = '#5a3e1b';
-	ctx.font         = 'bold 13px Arial';
+	ctx.font         = `bold ${fontSize.value}px Arial`;
 	ctx.textAlign    = 'center';
 	ctx.textBaseline = 'middle';
 
-	// Буквы сверху и снизу
 	for (let col = minCol; col <= maxCol; col++) {
 		const px = lineX(col);
 		ctx.fillText(letters[col], px, yNear);
 		ctx.fillText(letters[col], px, yFar);
 	}
-
-	// Цифры слева и справа
 	for (let row = minRow; row <= maxRow; row++) {
 		const py  = lineY(row);
 		const num = state.boardSize - row;
 		ctx.fillText(num, xNear, py);
 		ctx.fillText(num, xFar,  py);
 	}
-
 	ctx.restore();
 }
 
-// ─── Камни ───────────────────────────────────────────────────────
 function drawStones(ctx) {
 	if (!state.board?.length) return;
 	const { minCol, maxCol, minRow, maxRow } = visibleRange.value;
 	for (let y = minRow; y <= maxRow; y++) {
 		for (let x = minCol; x <= maxCol; x++) {
-		if (!isVisible(x, y)) continue;
-		const cell = state.board[y]?.[x];
-		if (cell !== EMPTY && cell !== undefined) drawStone(ctx, x, y, cell);
+			if (!isVisible(x, y)) continue;
+			const c = state.board[y]?.[x];
+			if (c !== EMPTY && c !== undefined) drawStone(ctx, x, y, c);
 		}
 	}
 }
 
 function drawStone(ctx, x, y, color, alpha = 1) {
-	const px = lineX(x);
-	const py = lineY(y);
-	const r  = CELL_SIZE * 0.46;
+	const px = lineX(x), py = lineY(y);
+	const r  = cell.value * 0.46;
 	ctx.save();
 	ctx.globalAlpha   = alpha;
 	ctx.shadowColor   = 'rgba(0,0,0,0.5)';
-	ctx.shadowBlur    = 6;
-	ctx.shadowOffsetX = 2;
-	ctx.shadowOffsetY = 3;
-	const grad = ctx.createRadialGradient(
-		px - r * 0.3, py - r * 0.3, r * 0.05, px, py, r
-	);
+	ctx.shadowBlur    = 6 * scale.value;
+	ctx.shadowOffsetX = 2 * scale.value;
+	ctx.shadowOffsetY = 3 * scale.value;
+	const grad = ctx.createRadialGradient(px - r * 0.3, py - r * 0.3, r * 0.05, px, py, r);
 	if (color === BLACK) {
 		grad.addColorStop(0, '#6a6a6a');
 		grad.addColorStop(0.4, '#222');
@@ -321,32 +319,31 @@ function drawMarks(ctx) {
 }
 
 function markColor(x, y) {
-	const cell = state.board[y]?.[x];
-	if (cell === BLACK) return '#ffffff';
-	if (cell === WHITE) return '#000000';
+	const c = state.board[y]?.[x];
+	if (c === BLACK) return '#ffffff';
+	if (c === WHITE) return '#000000';
 	return '#333333';
 }
 
 function drawMarkTR(ctx, sgf) {
 	const c = SGFParser.sgfToCoords(sgf);
 	if (!c || !isVisible(c.x, c.y)) return;
-	const px = lineX(c.x), py = lineY(c.y), r = CELL_SIZE * 0.28;
+	const px = lineX(c.x), py = lineY(c.y), r = cell.value * 0.28;
 	ctx.save();
-	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = 2;
+	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = lw.value;
 	ctx.beginPath();
 	ctx.moveTo(px, py - r);
 	ctx.lineTo(px + r, py + r * 0.7);
 	ctx.lineTo(px - r, py + r * 0.7);
-	ctx.closePath();
-	ctx.stroke(); ctx.restore();
+	ctx.closePath(); ctx.stroke(); ctx.restore();
 }
 
 function drawMarkSQ(ctx, sgf) {
 	const c = SGFParser.sgfToCoords(sgf);
 	if (!c || !isVisible(c.x, c.y)) return;
-	const px = lineX(c.x), py = lineY(c.y), r = CELL_SIZE * 0.24;
+	const px = lineX(c.x), py = lineY(c.y), r = cell.value * 0.24;
 	ctx.save();
-	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = 2;
+	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = lw.value;
 	ctx.strokeRect(px - r, py - r, r * 2, r * 2);
 	ctx.restore();
 }
@@ -354,9 +351,9 @@ function drawMarkSQ(ctx, sgf) {
 function drawMarkCR(ctx, sgf) {
 	const c = SGFParser.sgfToCoords(sgf);
 	if (!c || !isVisible(c.x, c.y)) return;
-	const px = lineX(c.x), py = lineY(c.y), r = CELL_SIZE * 0.26;
+	const px = lineX(c.x), py = lineY(c.y), r = cell.value * 0.26;
 	ctx.save();
-	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = 2;
+	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = lw.value;
 	ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.stroke();
 	ctx.restore();
 }
@@ -364,9 +361,9 @@ function drawMarkCR(ctx, sgf) {
 function drawMarkMA(ctx, sgf) {
 	const c = SGFParser.sgfToCoords(sgf);
 	if (!c || !isVisible(c.x, c.y)) return;
-	const px = lineX(c.x), py = lineY(c.y), r = CELL_SIZE * 0.24;
+	const px = lineX(c.x), py = lineY(c.y), r = cell.value * 0.24;
 	ctx.save();
-	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+	ctx.strokeStyle = markColor(c.x, c.y); ctx.lineWidth = lw.value * 1.25; ctx.lineCap = 'round';
 	ctx.beginPath();
 	ctx.moveTo(px - r, py - r); ctx.lineTo(px + r, py + r);
 	ctx.moveTo(px + r, py - r); ctx.lineTo(px - r, py + r);
@@ -387,15 +384,15 @@ function drawArrows(ctx) {
 }
 
 function drawArrow(ctx, x1, y1, x2, y2, color = '#2196f3') {
-	const headLen = 12, headAngle = Math.PI / 6;
+	const headLen = 12 * scale.value, headAngle = Math.PI / 6;
 	const angle   = Math.atan2(y2 - y1, x2 - x1);
-	const r       = CELL_SIZE * 0.46;
+	const r       = cell.value * 0.46;
 	if (Math.hypot(x2 - x1, y2 - y1) < r * 2) return;
 	const sx = x1 + Math.cos(angle) * r, sy = y1 + Math.sin(angle) * r;
 	const ex = x2 - Math.cos(angle) * r, ey = y2 - Math.sin(angle) * r;
 	ctx.save();
 	ctx.strokeStyle = color; ctx.fillStyle = color;
-	ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+	ctx.lineWidth = lw.value * 1.25; ctx.lineCap = 'round';
 	ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
 	ctx.beginPath(); ctx.moveTo(ex, ey);
 	ctx.lineTo(ex - headLen * Math.cos(angle - headAngle), ey - headLen * Math.sin(angle - headAngle));
@@ -406,11 +403,11 @@ function drawArrow(ctx, x1, y1, x2, y2, color = '#2196f3') {
 function drawArrowStartMarker(ctx) {
 	if (!state.arrowStart || !isVisible(state.arrowStart.x, state.arrowStart.y)) return;
 	const px = lineX(state.arrowStart.x), py = lineY(state.arrowStart.y);
-	const r  = CELL_SIZE * 0.46;
+	const r  = cell.value * 0.46;
 	ctx.save();
-	ctx.strokeStyle = '#2196f3'; ctx.lineWidth = 3;
-	ctx.setLineDash([4, 3]);
-	ctx.beginPath(); ctx.arc(px, py, r + 3, 0, Math.PI * 2); ctx.stroke();
+	ctx.strokeStyle = '#2196f3'; ctx.lineWidth = lw.value * 1.5;
+	ctx.setLineDash([4 * scale.value, 3 * scale.value]);
+	ctx.beginPath(); ctx.arc(px, py, r + 3 * scale.value, 0, Math.PI * 2); ctx.stroke();
 	ctx.restore();
 }
 
@@ -428,9 +425,9 @@ function drawHoverStone(ctx) {
 		drawStone(ctx, x, y, WHITE, 0.45);
 	} else if (state.interactionMode === MODE_REMOVE) {
 		if (state.board[y]?.[x] === EMPTY) return;
-		const px = lineX(x), py = lineY(y), r = CELL_SIZE * 0.46;
+		const px = lineX(x), py = lineY(y), r = cell.value * 0.46;
 		ctx.save();
-		ctx.strokeStyle = 'red'; ctx.lineWidth = 3;
+		ctx.strokeStyle = 'red'; ctx.lineWidth = lw.value * 1.5;
 		ctx.globalAlpha = 0.7; ctx.lineCap = 'round';
 		ctx.beginPath();
 		ctx.moveTo(px - r * 0.6, py - r * 0.6); ctx.lineTo(px + r * 0.6, py + r * 0.6);
@@ -444,18 +441,18 @@ function drawLastMoveMarker(ctx) {
 	if (!node || node.moveNumber === 0 || !node.coords) return;
 	const { x, y } = node.coords;
 	if (!isVisible(x, y)) return;
-	const px = lineX(x), py = lineY(y), r = CELL_SIZE * 0.18;
+	const px = lineX(x), py = lineY(y), r = cell.value * 0.18;
 	ctx.save();
 	ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
 	ctx.strokeStyle = node.color === BLACK ? '#fff' : '#333';
-	ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+	ctx.lineWidth = lw.value; ctx.stroke(); ctx.restore();
 }
 
 function drawKoMarker(ctx) {
 	if (!state.ko || !isVisible(state.ko.x, state.ko.y)) return;
-	const px = lineX(state.ko.x), py = lineY(state.ko.y), r = CELL_SIZE * 0.22;
+	const px = lineX(state.ko.x), py = lineY(state.ko.y), r = cell.value * 0.22;
 	ctx.save();
-	ctx.strokeStyle = 'red'; ctx.lineWidth = 2;
+	ctx.strokeStyle = 'red'; ctx.lineWidth = lw.value;
 	ctx.strokeRect(px - r, py - r, r * 2, r * 2);
 	ctx.restore();
 }
@@ -464,8 +461,8 @@ function drawKoMarker(ctx) {
 function pixelToCoords(px, py) {
 	const { minCol, maxCol, minRow, maxRow } = visibleRange.value;
 	const p   = pad.value;
-	const col = Math.round((px - p.left) / CELL_SIZE) + minCol;
-	const row = Math.round((py - p.top)  / CELL_SIZE) + minRow;
+	const col = Math.round((px - p.left) / cell.value) + minCol;
+	const row = Math.round((py - p.top)  / cell.value) + minRow;
 	if (col >= minCol && col <= maxCol && row >= minRow && row <= maxRow) {
 		return { x: col, y: row };
 	}
@@ -486,8 +483,14 @@ function handleClick(event) {
 	if (props.prohibit_actions) return;
 	const { px, py } = getEventPos(event);
 	const coords = pixelToCoords(px, py);
-	if (coords && isVisible(coords.x, coords.y)) handleBoardClick(coords.x, coords.y);
-	if (state.interactionMode==MODE_PLAY) emits('madeMove')
+	if (coords && isVisible(coords.x, coords.y)) {
+		const prevMoveNumber = state.currentNode?.moveNumber;
+		handleBoardClick(coords.x, coords.y);
+		if (state.interactionMode === MODE_PLAY &&
+			state.currentNode?.moveNumber !== prevMoveNumber) {
+			emits('madeMove');
+		}
+	}
 }
 
 function handleMouseMove(event) {
@@ -497,18 +500,15 @@ function handleMouseMove(event) {
 	setHoveredCell(coords && isVisible(coords.x, coords.y) ? coords : null);
 }
 
-function handleMouseLeave() { 
+function handleMouseLeave() {
 	if (props.prohibit_actions) return;
-	setHoveredCell(null); 
+	setHoveredCell(null);
 }
 
 // ─── Реактивность ────────────────────────────────────────────────
 watch(
-	() => state.boardSize,
-	async () => {
-		await nextTick();
-		draw();
-	}
+	() => [state.boardSize, props.min_side, props.show_coordinates, props.ignore_vw],
+	async () => { await nextTick(); draw(); }
 );
 
 watch(
@@ -520,31 +520,10 @@ watch(
 		state.arrowStart,
 		state.interactionMode,
 		state.visiblePoints,
-		props.ignore_vw,
-		props.show_coordinates,
 	],
-	async () => {
-		await nextTick();
-		draw();
-	},
+	async () => { await nextTick(); draw(); },
 	{ deep: true }
 );
 
 onMounted(draw);
 </script>
-
-<style scoped>
-.goboard-wrapper {
-	display: inline-block;
-	border-radius: 4px;
-	overflow: hidden;
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-}
-
-.goboard-canvas     { display: block; max-width: 100%; height: auto; }
-.cursor-crosshair   { cursor: crosshair; }
-.cursor-mark        { cursor: cell; }
-.cursor-remove      { cursor: not-allowed; }
-.cursor-arrow-start { cursor: copy; }
-.cursor-arrow-end   { cursor: crosshair; }
-</style>
